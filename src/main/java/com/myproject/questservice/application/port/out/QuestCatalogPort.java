@@ -10,4 +10,6 @@ public interface QuestCatalogPort {
     List<Quest> findAll();
 
     Optional<Quest> findById(String questId);
+
+    void save(Quest quest);
 }

@@ -4,6 +4,11 @@ import com.myproject.questservice.adapter.in.rest.dto.GameView;
 import com.myproject.questservice.adapter.in.rest.dto.OptionView;
 import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
 import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
+import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
+import com.myproject.questservice.adapter.out.dsl.ast.QuestAst;
+import com.myproject.questservice.adapter.out.dsl.compiler.QuestDslCompiler;
+import com.myproject.questservice.adapter.out.dsl.parser.QuestDslParserFacade;
+import com.myproject.questservice.adapter.out.dsl.validator.QuestDslValidator;
 import com.myproject.questservice.application.port.in.QuestUseCase;
 import com.myproject.questservice.application.port.out.QuestCatalogPort;
 import com.myproject.questservice.application.port.out.SessionStorePort;
@@ -22,6 +27,9 @@ public class QuestApplicationService implements QuestUseCase {
 
     private final QuestCatalogPort questCatalogPort;
     private final SessionStorePort sessionStorePort;
+    private final QuestDslParserFacade questDslParserFacade;
+    private final QuestDslValidator questDslValidator;
+    private final QuestDslCompiler questDslCompiler;
 
     @Override
     public List<QuestSummaryView> listQuests() {
@@ -73,6 +81,19 @@ public class QuestApplicationService implements QuestUseCase {
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException(ex.getMessage());
         }
+    }
+
+    @Override
+    public UploadQuestResponse uploadQuest(String dslText) {
+        if (dslText == null || dslText.isBlank()) {
+            throw new BadRequestException("DSL text is required");
+        }
+
+        QuestAst ast = questDslParserFacade.parse(dslText);
+        questDslValidator.validate(ast);
+        Quest quest = questDslCompiler.compile(ast);
+        questCatalogPort.save(quest);
+        return new UploadQuestResponse(quest.id(), quest.title());
     }
 
     private GameView toView(Quest quest, QuestEngine engine, Node node) {

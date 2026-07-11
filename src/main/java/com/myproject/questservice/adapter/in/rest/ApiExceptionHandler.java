@@ -1,37 +1,55 @@
 package com.myproject.questservice.adapter.in.rest;
 
+import com.myproject.questservice.adapter.in.rest.dto.ApiErrorResponse;
+import com.myproject.questservice.adapter.out.dsl.error.DslProcessingException;
 import com.myproject.questservice.application.service.BadRequestException;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.service.QuestAlreadyExistsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.Map;
-
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
     @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(NotFoundException ex) {
+    public ResponseEntity<ApiErrorResponse> handleNotFound(NotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", ex.getMessage()));
+                .body(new ApiErrorResponse("NOT_FOUND", ex.getMessage(), null, null));
     }
 
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<Map<String, String>> handleBadRequest(BadRequestException ex) {
+    public ResponseEntity<ApiErrorResponse> handleBadRequest(BadRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", ex.getMessage()));
+                .body(new ApiErrorResponse("BAD_REQUEST", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(QuestAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleConflict(QuestAlreadyExistsException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse("QUEST_ALREADY_EXISTS", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(DslProcessingException.class)
+    public ResponseEntity<ApiErrorResponse> handleDslError(DslProcessingException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        ex.error().code(),
+                        ex.error().message(),
+                        ex.error().line(),
+                        ex.error().column()
+                ));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String errorMessage = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(error -> error.getDefaultMessage() == null ? "Validation failed" : error.getDefaultMessage())
                 .orElse("Validation failed");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", errorMessage));
+                .body(new ApiErrorResponse("BAD_REQUEST", errorMessage, null, null));
     }
 }
