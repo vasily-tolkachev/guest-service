@@ -5,6 +5,7 @@ import com.myproject.questservice.adapter.in.rest.dto.GameView;
 import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
 import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
 import com.myproject.questservice.application.port.in.QuestUseCase;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,8 +33,13 @@ public class QuestController {
         return questUseCase.start(questId);
     }
 
+    @GetMapping("/sessions/{sessionId}")
+    public GameView getSession(@PathVariable String sessionId) {
+        return questUseCase.getSession(sessionId);
+    }
+
     @PostMapping("/sessions/{sessionId}/choose")
-    public GameView choose(@PathVariable String sessionId, @RequestBody ChooseOptionRequest request) {
+    public GameView choose(@PathVariable String sessionId, @Valid @RequestBody ChooseOptionRequest request) {
         return questUseCase.choose(sessionId, request.optionId());
     }
 }

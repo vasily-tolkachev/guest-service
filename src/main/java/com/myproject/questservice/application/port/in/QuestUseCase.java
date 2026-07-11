@@ -12,5 +12,7 @@ public interface QuestUseCase {
 
     StartQuestResponse start(String questId);
 
+    GameView getSession(String sessionId);
+
     GameView choose(String sessionId, String optionId);
 }

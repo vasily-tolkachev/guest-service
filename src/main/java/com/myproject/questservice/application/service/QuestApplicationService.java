@@ -44,6 +44,20 @@ public class QuestApplicationService implements QuestUseCase {
     }
 
     @Override
+    public GameView getSession(String sessionId) {
+        GameState state = sessionStorePort.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+        Quest quest = questCatalogPort.findById(state.getQuestId())
+                .orElseThrow(() -> new NotFoundException("Quest not found: " + state.getQuestId()));
+        QuestEngine engine = new QuestEngine(quest, state);
+        Node node = quest.nodes().get(state.getCurrentNodeId());
+        if (node == null) {
+            throw new NotFoundException("Node not found: " + state.getCurrentNodeId());
+        }
+        return toView(quest, engine, node);
+    }
+
+    @Override
     public GameView choose(String sessionId, String optionId) {
         if (optionId == null || optionId.isBlank()) {
             throw new BadRequestException("optionId is required");
