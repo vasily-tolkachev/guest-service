@@ -54,6 +54,9 @@ textAtom
     : ID
     | STRING
     | WORD
+    | COMMA
+    | LPAREN
+    | RPAREN
     ;
 
 endOfLine
