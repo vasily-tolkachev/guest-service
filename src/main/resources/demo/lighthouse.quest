@@ -1,0 +1,23 @@
+quest lighthouse
+
+title "Old Lighthouse"
+
+node start
+Ты стоишь возле старого маяка.
+> Войти
+-> keeper
+> Осмотреть берег
+-> beach
+
+node keeper
+Внутри тебя встречает старый смотритель.
+> Поговорить
+-> end
+
+node beach
+Берег пуст.
+> Вернуться
+-> start
+
+node end
+Конец.

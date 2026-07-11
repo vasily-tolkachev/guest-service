@@ -3,6 +3,7 @@ package com.myproject.questservice.adapter.in.rest;
 import com.myproject.questservice.adapter.in.rest.dto.ApiErrorResponse;
 import com.myproject.questservice.adapter.out.dsl.error.DslProcessingException;
 import com.myproject.questservice.application.service.BadRequestException;
+import com.myproject.questservice.application.service.FileReadException;
 import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.application.service.QuestAlreadyExistsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -30,6 +31,12 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleConflict(QuestAlreadyExistsException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiErrorResponse("QUEST_ALREADY_EXISTS", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(FileReadException.class)
+    public ResponseEntity<ApiErrorResponse> handleFileRead(FileReadException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse("FILE_READ_ERROR", ex.getMessage(), null, null));
     }
 
     @ExceptionHandler(DslProcessingException.class)

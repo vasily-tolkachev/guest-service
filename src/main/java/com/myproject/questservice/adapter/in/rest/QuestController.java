@@ -7,6 +7,7 @@ import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
 import com.myproject.questservice.application.port.in.QuestUseCase;
 import com.myproject.questservice.application.service.BadRequestException;
+import com.myproject.questservice.application.service.FileReadException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -40,11 +41,14 @@ public class QuestController {
         if (file.isEmpty()) {
             throw new BadRequestException("File is required");
         }
+        if (file.getOriginalFilename() == null || !file.getOriginalFilename().endsWith(".quest")) {
+            throw new BadRequestException("Only .quest files are supported");
+        }
         try {
             String dslText = new String(file.getBytes(), StandardCharsets.UTF_8);
             return questUseCase.uploadQuest(dslText);
         } catch (IOException ex) {
-            throw new BadRequestException("Unable to read uploaded file");
+            throw new FileReadException("Unable to read uploaded file");
         }
     }
 
