@@ -55,6 +55,7 @@ textAtom
     : ID
     | STRING
     | WORD
+    | NUMBER
     | COMMA
     | LPAREN
     | RPAREN
