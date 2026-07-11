@@ -1,5 +1,7 @@
 package com.myproject.questservice.adapter.out.dsl.parser;
 
+import com.myproject.questservice.adapter.out.dsl.ast.ConditionAst;
+import com.myproject.questservice.adapter.out.dsl.ast.EffectAst;
 import com.myproject.questservice.adapter.out.dsl.ast.NodeAst;
 import com.myproject.questservice.adapter.out.dsl.ast.OptionAst;
 import com.myproject.questservice.adapter.out.dsl.ast.QuestAst;
@@ -85,9 +87,35 @@ public class QuestDslParserFacade {
                 Token optionToken = optionContext.GT().getSymbol();
                 String optionText = toLineText(optionContext.textLineContent());
                 String targetNodeId = optionContext.ID().getText();
+                List<ConditionAst> conditions = new ArrayList<>();
+                List<EffectAst> effects = new ArrayList<>();
+                for (QuestDslParser.OptionDirectiveContext directiveContext : optionContext.optionDirective()) {
+                    QuestDslParser.FunctionCallContext functionCallContext = directiveContext.functionCall();
+                    Token functionToken = functionCallContext.ID().getSymbol();
+                    String name = functionCallContext.ID().getText();
+                    List<String> arguments = toFunctionArgs(functionCallContext.functionArgs());
+
+                    if (directiveContext.IF_DIRECTIVE() != null) {
+                        conditions.add(new ConditionAst(
+                                name,
+                                arguments,
+                                functionToken.getLine(),
+                                functionToken.getCharPositionInLine() + 1
+                        ));
+                    } else {
+                        effects.add(new EffectAst(
+                                name,
+                                arguments,
+                                functionToken.getLine(),
+                                functionToken.getCharPositionInLine() + 1
+                        ));
+                    }
+                }
                 options.add(new OptionAst(
                         optionText,
                         targetNodeId,
+                        conditions,
+                        effects,
                         optionToken.getLine(),
                         optionToken.getCharPositionInLine() + 1
                 ));
@@ -112,6 +140,21 @@ public class QuestDslParserFacade {
                 }
             }
             return String.join(" ", atoms).trim();
+        }
+
+        private List<String> toFunctionArgs(QuestDslParser.FunctionArgsContext context) {
+            if (context == null) {
+                return List.of();
+            }
+            List<String> arguments = new ArrayList<>();
+            for (QuestDslParser.FunctionArgContext argumentContext : context.functionArg()) {
+                if (argumentContext.STRING() != null) {
+                    arguments.add(stripQuotes(argumentContext.STRING().getText()));
+                } else {
+                    arguments.add(argumentContext.ID().getText());
+                }
+            }
+            return arguments;
         }
 
         private String stripQuotes(String value) {

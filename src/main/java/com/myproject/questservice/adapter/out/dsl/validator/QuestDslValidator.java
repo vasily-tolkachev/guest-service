@@ -1,5 +1,7 @@
 package com.myproject.questservice.adapter.out.dsl.validator;
 
+import com.myproject.questservice.adapter.out.dsl.ast.ConditionAst;
+import com.myproject.questservice.adapter.out.dsl.ast.EffectAst;
 import com.myproject.questservice.adapter.out.dsl.ast.NodeAst;
 import com.myproject.questservice.adapter.out.dsl.ast.OptionAst;
 import com.myproject.questservice.adapter.out.dsl.ast.QuestAst;
@@ -79,7 +81,72 @@ public class QuestDslValidator {
                             option.column()
                     ));
                 }
+                validateConditions(option.conditions());
+                validateEffects(option.effects());
             }
+        }
+    }
+
+    private void validateConditions(java.util.List<ConditionAst> conditions) {
+        for (ConditionAst condition : conditions) {
+            String name = condition.name().toLowerCase();
+            int argsCount = condition.arguments().size();
+
+            if ("hasfact".equals(name) || "not".equals(name)) {
+                if (argsCount != 1) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Condition '" + condition.name() + "' expects exactly 1 argument.",
+                            condition.line(),
+                            condition.column()
+                    ));
+                }
+                continue;
+            }
+            if ("and".equals(name) || "or".equals(name)) {
+                if (argsCount < 2) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Condition '" + condition.name() + "' expects at least 2 arguments.",
+                            condition.line(),
+                            condition.column()
+                    ));
+                }
+                continue;
+            }
+
+            throw new DslProcessingException(new DslError(
+                    "DSL_VALIDATION_ERROR",
+                    "Unknown condition: " + condition.name(),
+                    condition.line(),
+                    condition.column()
+            ));
+        }
+    }
+
+    private void validateEffects(java.util.List<EffectAst> effects) {
+        for (EffectAst effect : effects) {
+            String name = effect.name().toLowerCase();
+            int argsCount = effect.arguments().size();
+
+            if ("addfact".equals(name) || "removefact".equals(name)) {
+                if (argsCount != 1) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Effect '" + effect.name() + "' expects exactly 1 argument.",
+                            effect.line(),
+                            effect.column()
+                    ));
+                }
+                continue;
+            }
+
+            throw new DslProcessingException(new DslError(
+                    "DSL_VALIDATION_ERROR",
+                    "Unknown effect: " + effect.name(),
+                    effect.line(),
+                    effect.column()
+            ));
         }
     }
 }

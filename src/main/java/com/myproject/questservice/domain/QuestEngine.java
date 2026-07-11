@@ -1,5 +1,7 @@
 package com.myproject.questservice.domain;
 
+import java.util.List;
+
 public class QuestEngine {
 
     private final Quest quest;
@@ -17,13 +19,20 @@ public class QuestEngine {
 
     public Node choose(String optionId) {
         Node currentNode = requireNode(gameState.getCurrentNodeId());
-        Option selected = currentNode.options()
+        Option selected = availableOptions(currentNode)
                 .stream()
                 .filter(option -> option.id().equals(optionId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Option not found: " + optionId));
+        selected.transition().effects().forEach(effect -> effect.apply(gameState));
         gameState.setCurrentNodeId(selected.transition().targetNodeId());
         return requireNode(gameState.getCurrentNodeId());
+    }
+
+    public List<Option> availableOptions(Node node) {
+        return node.options().stream()
+                .filter(this::isTransitionAvailable)
+                .toList();
     }
 
     private Node requireNode(String nodeId) {
@@ -35,6 +44,11 @@ public class QuestEngine {
     }
 
     public boolean isFinished(Node node) {
-        return node.options().isEmpty();
+        return availableOptions(node).isEmpty();
+    }
+
+    private boolean isTransitionAvailable(Option option) {
+        return option.transition().conditions().stream()
+                .allMatch(condition -> condition.matches(gameState));
     }
 }

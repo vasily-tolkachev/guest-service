@@ -25,7 +25,25 @@ textLine
     ;
 
 optionDecl
-    : GT WS* textLineContent endOfLine ARROW WS* ID endOfLine
+    : GT WS* textLineContent endOfLine optionDirective* ARROW WS* ID endOfLine
+    ;
+
+optionDirective
+    : IF_DIRECTIVE WS+ functionCall endOfLine
+    | EFFECT_DIRECTIVE WS+ functionCall endOfLine
+    ;
+
+functionCall
+    : ID WS* LPAREN WS* functionArgs? WS* RPAREN
+    ;
+
+functionArgs
+    : functionArg (WS* COMMA WS* functionArg)*
+    ;
+
+functionArg
+    : ID
+    | STRING
     ;
 
 textLineContent
@@ -51,6 +69,11 @@ TITLE: 'title';
 NODE: 'node';
 GT: '>';
 ARROW: '->';
+IF_DIRECTIVE: '@if';
+EFFECT_DIRECTIVE: '@effect';
+LPAREN: '(';
+RPAREN: ')';
+COMMA: ',';
 STRING: '"' (~["\r\n] | '\\"')* '"';
 ID: [a-zA-Z_][a-zA-Z0-9_-]*;
 WORD: ~[ \t\r\n]+;

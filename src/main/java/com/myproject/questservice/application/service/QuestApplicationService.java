@@ -100,7 +100,9 @@ public class QuestApplicationService implements QuestUseCase {
         return new GameView(
                 quest.title(),
                 node.text(),
-                node.options().stream().map(option -> new OptionView(option.id(), option.text())).toList(),
+                engine.availableOptions(node).stream()
+                        .map(option -> new OptionView(option.id(), option.text()))
+                        .toList(),
                 engine.isFinished(node)
         );
     }
