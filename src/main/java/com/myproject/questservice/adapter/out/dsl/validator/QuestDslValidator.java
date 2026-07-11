@@ -92,7 +92,7 @@ public class QuestDslValidator {
             String name = condition.name().toLowerCase();
             int argsCount = condition.arguments().size();
 
-            if ("hasfact".equals(name) || "not".equals(name)) {
+            if ("hasfact".equals(name) || "hasflag".equals(name) || "not".equals(name)) {
                 if (argsCount != 1) {
                     throw new DslProcessingException(new DslError(
                             "DSL_VALIDATION_ERROR",
@@ -129,7 +129,11 @@ public class QuestDslValidator {
             String name = effect.name().toLowerCase();
             int argsCount = effect.arguments().size();
 
-            if ("addfact".equals(name) || "removefact".equals(name)) {
+            if ("addfact".equals(name)
+                    || "removefact".equals(name)
+                    || "setflag".equals(name)
+                    || "additem".equals(name)
+                    || "completequest".equals(name)) {
                 if (argsCount != 1) {
                     throw new DslProcessingException(new DslError(
                             "DSL_VALIDATION_ERROR",

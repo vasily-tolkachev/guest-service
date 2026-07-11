@@ -66,6 +66,7 @@ public class QuestDslCompiler {
         String name = conditionAst.name().toLowerCase();
         return switch (name) {
             case "hasfact" -> new HasFactCondition(conditionAst.arguments().getFirst());
+            case "hasflag" -> new HasFactCondition(conditionAst.arguments().getFirst());
             case "not" -> new NotCondition(new HasFactCondition(conditionAst.arguments().getFirst()));
             case "and" -> new AndCondition(conditionAst.arguments().stream()
                     .map(HasFactCondition::new)
@@ -89,6 +90,9 @@ public class QuestDslCompiler {
         String name = effectAst.name().toLowerCase();
         return switch (name) {
             case "addfact" -> new AddFactEffect(effectAst.arguments().getFirst());
+            case "setflag" -> new AddFactEffect(effectAst.arguments().getFirst());
+            case "additem" -> new AddFactEffect("item:" + effectAst.arguments().getFirst());
+            case "completequest" -> new AddFactEffect("quest_completed:" + effectAst.arguments().getFirst());
             case "removefact" -> new RemoveFactEffect(effectAst.arguments().getFirst());
             default -> throw new IllegalArgumentException("Unknown effect: " + effectAst.name());
         };

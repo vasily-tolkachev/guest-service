@@ -47,7 +47,7 @@ functionArg
     ;
 
 textLineContent
-    : textAtom (WS+ textAtom)*
+    : textAtom (WS* textAtom)*
     ;
 
 textAtom
