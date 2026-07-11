@@ -76,6 +76,6 @@ RPAREN: ')';
 COMMA: ',';
 STRING: '"' (~["\r\n] | '\\"')* '"';
 ID: [a-zA-Z_][a-zA-Z0-9_-]*;
-WORD: ~[ \t\r\n]+;
+WORD: ~[ \t\r\n(),]+;
 WS: [ \t]+;
 NEWLINE: '\r'? '\n';
