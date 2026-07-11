@@ -17,11 +17,15 @@ nodeDecl
     ;
 
 nodeBody
-    : (blankLines* textLine)+ (blankLines* optionDecl)*
+    : (blankLines* nodeTitleDecl)? (blankLines* textLine)+ (blankLines* optionDecl)*
     ;
 
 textLine
     : textLineContent endOfLine
+    ;
+
+nodeTitleDecl
+    : TITLE WS+ STRING endOfLine
     ;
 
 optionDecl

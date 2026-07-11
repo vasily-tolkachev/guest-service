@@ -4,6 +4,7 @@ import java.util.List;
 
 public record NodeAst(
         String id,
+        String title,
         String text,
         List<OptionAst> options,
         int line,

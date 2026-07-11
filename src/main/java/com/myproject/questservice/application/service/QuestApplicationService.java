@@ -2,6 +2,7 @@ package com.myproject.questservice.application.service;
 
 import com.myproject.questservice.adapter.in.rest.dto.GameView;
 import com.myproject.questservice.adapter.in.rest.dto.OptionView;
+import com.myproject.questservice.adapter.in.rest.dto.QuestMapView;
 import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
 import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
@@ -85,6 +86,44 @@ public class QuestApplicationService implements QuestUseCase {
     }
 
     @Override
+    public GameView back(String sessionId) {
+        GameState state = sessionStorePort.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+        Quest quest = questCatalogPort.findById(state.getQuestId())
+                .orElseThrow(() -> new NotFoundException("Quest not found: " + state.getQuestId()));
+        try {
+            QuestEngine engine = new QuestEngine(quest, state);
+            Node node = engine.goBack();
+            return toView(quest, engine, node);
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException(ex.getMessage());
+        }
+    }
+
+    @Override
+    public QuestMapView getMap(String sessionId) {
+        GameState state = sessionStorePort.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+        Quest quest = questCatalogPort.findById(state.getQuestId())
+                .orElseThrow(() -> new NotFoundException("Quest not found: " + state.getQuestId()));
+        QuestEngine engine = new QuestEngine(quest, state);
+        Node currentNode = quest.nodes().get(state.getCurrentNodeId());
+        if (currentNode == null) {
+            throw new NotFoundException("Node not found: " + state.getCurrentNodeId());
+        }
+        List<String> available = engine.availableOptions(currentNode).stream()
+                .map(option -> option.transition().targetNodeId())
+                .distinct()
+                .sorted()
+                .toList();
+        return new QuestMapView(
+                state.getCurrentNodeId(),
+                state.getVisitedNodes().stream().sorted().toList(),
+                available
+        );
+    }
+
+    @Override
     public UploadQuestResponse uploadQuest(String dslText) {
         if (dslText == null || dslText.isBlank()) {
             throw new BadRequestException("DSL text is required");
@@ -101,12 +140,16 @@ public class QuestApplicationService implements QuestUseCase {
         GameState state = engine.gameState();
         return new GameView(
                 quest.title(),
+                node.id(),
+                node.title(),
                 node.text(),
                 engine.availableOptions(node).stream()
                         .map(option -> new OptionView(option.id(), option.text()))
                         .toList(),
                 state.getInventory().stream().sorted().toList(),
                 Map.copyOf(state.getVariables()),
+                state.getVisitedNodes().stream().sorted().toList(),
+                engine.canGoBack(),
                 engine.isFinished(node)
         );
     }

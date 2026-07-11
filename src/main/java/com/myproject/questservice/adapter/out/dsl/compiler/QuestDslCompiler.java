@@ -40,6 +40,7 @@ public class QuestDslCompiler {
         for (NodeAst nodeAst : ast.nodes()) {
             nodes.put(nodeAst.id(), new Node(
                     nodeAst.id(),
+                    nodeAst.title(),
                     nodeAst.text(),
                     toDomainOptions(nodeAst)
             ));

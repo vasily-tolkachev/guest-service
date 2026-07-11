@@ -51,6 +51,14 @@ public class QuestDslValidator {
                         node.column()
                 ));
             }
+            if (node.title() == null || node.title().isBlank()) {
+                throw new DslProcessingException(new DslError(
+                        "DSL_VALIDATION_ERROR",
+                        "Node title is required for node: " + node.id(),
+                        node.line(),
+                        node.column()
+                ));
+            }
             if (node.text() == null || node.text().isBlank()) {
                 throw new DslProcessingException(new DslError(
                         "DSL_VALIDATION_ERROR",

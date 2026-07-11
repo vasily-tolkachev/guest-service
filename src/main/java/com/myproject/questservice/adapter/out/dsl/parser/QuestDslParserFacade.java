@@ -72,6 +72,10 @@ public class QuestDslParserFacade {
         private NodeAst toNodeAst(QuestDslParser.NodeDeclContext nodeContext) {
             Token nodeIdToken = nodeContext.ID().getSymbol();
             String nodeId = nodeContext.ID().getText();
+            String nodeTitle = nodeId;
+            if (nodeContext.nodeBody().nodeTitleDecl() != null) {
+                nodeTitle = stripQuotes(nodeContext.nodeBody().nodeTitleDecl().STRING().getText());
+            }
 
             StringBuilder textBuilder = new StringBuilder();
             List<QuestDslParser.TextLineContext> textLines = nodeContext.nodeBody().textLine();
@@ -123,6 +127,7 @@ public class QuestDslParserFacade {
 
             return new NodeAst(
                     nodeId,
+                    nodeTitle,
                     textBuilder.toString(),
                     options,
                     nodeIdToken.getLine(),

@@ -2,6 +2,7 @@ package com.myproject.questservice.adapter.in.rest;
 
 import com.myproject.questservice.adapter.in.rest.dto.ChooseOptionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.GameView;
+import com.myproject.questservice.adapter.in.rest.dto.QuestMapView;
 import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
 import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
@@ -65,5 +66,15 @@ public class QuestController {
     @PostMapping("/sessions/{sessionId}/choose")
     public GameView choose(@PathVariable String sessionId, @Valid @RequestBody ChooseOptionRequest request) {
         return questUseCase.choose(sessionId, request.optionId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/back")
+    public GameView back(@PathVariable String sessionId) {
+        return questUseCase.back(sessionId);
+    }
+
+    @GetMapping("/sessions/{sessionId}/map")
+    public QuestMapView getMap(@PathVariable String sessionId) {
+        return questUseCase.getMap(sessionId);
     }
 }
