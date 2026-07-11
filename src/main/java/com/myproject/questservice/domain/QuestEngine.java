@@ -47,6 +47,10 @@ public class QuestEngine {
         return availableOptions(node).isEmpty();
     }
 
+    public GameState gameState() {
+        return gameState;
+    }
+
     private boolean isTransitionAvailable(Option option) {
         return option.transition().conditions().stream()
                 .allMatch(condition -> condition.matches(gameState));

@@ -92,11 +92,41 @@ public class QuestDslValidator {
             String name = condition.name().toLowerCase();
             int argsCount = condition.arguments().size();
 
-            if ("hasfact".equals(name) || "hasflag".equals(name) || "not".equals(name)) {
+            if ("hasfact".equals(name) || "hasflag".equals(name) || "not".equals(name) || "hasitem".equals(name)) {
                 if (argsCount != 1) {
                     throw new DslProcessingException(new DslError(
                             "DSL_VALIDATION_ERROR",
                             "Condition '" + condition.name() + "' expects exactly 1 argument.",
+                            condition.line(),
+                            condition.column()
+                    ));
+                }
+                continue;
+            }
+            if ("variableequals".equals(name)) {
+                if (argsCount != 2) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Condition '" + condition.name() + "' expects exactly 2 arguments.",
+                            condition.line(),
+                            condition.column()
+                    ));
+                }
+                continue;
+            }
+            if ("variablegreater".equals(name) || "variableless".equals(name)) {
+                if (argsCount != 2) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Condition '" + condition.name() + "' expects exactly 2 arguments.",
+                            condition.line(),
+                            condition.column()
+                    ));
+                }
+                if (!isInteger(condition.arguments().get(1))) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Condition '" + condition.name() + "' expects integer as second argument.",
                             condition.line(),
                             condition.column()
                     ));
@@ -133,11 +163,43 @@ public class QuestDslValidator {
                     || "removefact".equals(name)
                     || "setflag".equals(name)
                     || "additem".equals(name)
-                    || "completequest".equals(name)) {
+                    || "completequest".equals(name)
+                    || "giveitem".equals(name)
+                    || "removeitem".equals(name)) {
                 if (argsCount != 1) {
                     throw new DslProcessingException(new DslError(
                             "DSL_VALIDATION_ERROR",
                             "Effect '" + effect.name() + "' expects exactly 1 argument.",
+                            effect.line(),
+                            effect.column()
+                    ));
+                }
+                continue;
+            }
+            if ("setvariable".equals(name)) {
+                if (argsCount != 2) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Effect '" + effect.name() + "' expects exactly 2 arguments.",
+                            effect.line(),
+                            effect.column()
+                    ));
+                }
+                continue;
+            }
+            if ("incrementvariable".equals(name) || "decrementvariable".equals(name)) {
+                if (argsCount != 2) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Effect '" + effect.name() + "' expects exactly 2 arguments.",
+                            effect.line(),
+                            effect.column()
+                    ));
+                }
+                if (!isInteger(effect.arguments().get(1))) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Effect '" + effect.name() + "' expects integer as second argument.",
                             effect.line(),
                             effect.column()
                     ));
@@ -151,6 +213,15 @@ public class QuestDslValidator {
                     effect.line(),
                     effect.column()
             ));
+        }
+    }
+
+    private boolean isInteger(String value) {
+        try {
+            Integer.parseInt(value);
+            return true;
+        } catch (NumberFormatException ex) {
+            return false;
         }
     }
 }

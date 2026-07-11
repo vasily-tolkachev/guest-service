@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -97,12 +98,15 @@ public class QuestApplicationService implements QuestUseCase {
     }
 
     private GameView toView(Quest quest, QuestEngine engine, Node node) {
+        GameState state = engine.gameState();
         return new GameView(
                 quest.title(),
                 node.text(),
                 engine.availableOptions(node).stream()
                         .map(option -> new OptionView(option.id(), option.text()))
                         .toList(),
+                state.getInventory().stream().sorted().toList(),
+                Map.copyOf(state.getVariables()),
                 engine.isFinished(node)
         );
     }

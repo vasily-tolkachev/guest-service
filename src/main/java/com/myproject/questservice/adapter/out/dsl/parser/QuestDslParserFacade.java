@@ -150,6 +150,8 @@ public class QuestDslParserFacade {
             for (QuestDslParser.FunctionArgContext argumentContext : context.functionArg()) {
                 if (argumentContext.STRING() != null) {
                     arguments.add(stripQuotes(argumentContext.STRING().getText()));
+                } else if (argumentContext.NUMBER() != null) {
+                    arguments.add(argumentContext.NUMBER().getText());
                 } else {
                     arguments.add(argumentContext.ID().getText());
                 }

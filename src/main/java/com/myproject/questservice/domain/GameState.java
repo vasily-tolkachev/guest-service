@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Getter
@@ -16,8 +18,10 @@ public class GameState {
     private String questId;
     private String currentNodeId;
     private Set<String> facts;
+    private Map<String, String> variables;
+    private Set<String> inventory;
 
     public GameState(String sessionId, String questId, String currentNodeId) {
-        this(sessionId, questId, currentNodeId, new HashSet<>());
+        this(sessionId, questId, currentNodeId, new HashSet<>(), new HashMap<>(), new HashSet<>());
     }
 }

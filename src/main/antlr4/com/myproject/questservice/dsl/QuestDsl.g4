@@ -44,6 +44,7 @@ functionArgs
 functionArg
     : ID
     | STRING
+    | NUMBER
     ;
 
 textLineContent
@@ -79,6 +80,7 @@ RPAREN: ')';
 COMMA: ',';
 STRING: '"' (~["\r\n] | '\\"')* '"';
 ID: [a-zA-Z_][a-zA-Z0-9_-]*;
+NUMBER: '-'? [0-9]+;
 WORD: ~[ \t\r\n(),]+;
 WS: [ \t]+;
 NEWLINE: '\r'? '\n';
