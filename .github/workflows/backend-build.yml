@@ -1,6 +1,8 @@
 name: Backend Build And Publish
 
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -64,3 +66,12 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.QUEST_IMAGE_NAME }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.QUEST_IMAGE_NAME }}:latest
+
+      - name: Trigger infrastructure deploy
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.INFRA_REPO_DISPATCH_TOKEN }}
+          repository: ${{ github.repository_owner }}/mastery-infrastructure
+          event-type: backend-image-published
+          client-payload: >-
+            {"source_repo":"${{ github.repository }}","source_sha":"${{ github.sha }}","image":"${{ env.REGISTRY }}/${{ env.QUEST_IMAGE_NAME }}:${{ github.sha }}"}
