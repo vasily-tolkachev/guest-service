@@ -77,17 +77,19 @@ public class QuestDslParserFacade {
                 if (i > 0) {
                     textBuilder.append("\n");
                 }
-                textBuilder.append(textLines.get(i).TEXT_LINE().getText().trim());
+                textBuilder.append(toLineText(textLines.get(i).textLineContent()));
             }
 
             List<OptionAst> options = new ArrayList<>();
             for (QuestDslParser.OptionDeclContext optionContext : nodeContext.nodeBody().optionDecl()) {
-                Token optionTextToken = optionContext.TEXT_LINE().getSymbol();
+                Token optionToken = optionContext.GT().getSymbol();
+                String optionText = toLineText(optionContext.textLineContent());
+                String targetNodeId = optionContext.ID().getText();
                 options.add(new OptionAst(
-                        optionContext.TEXT_LINE().getText().trim(),
-                        optionContext.ID().getText(),
-                        optionTextToken.getLine(),
-                        optionTextToken.getCharPositionInLine() + 1
+                        optionText,
+                        targetNodeId,
+                        optionToken.getLine(),
+                        optionToken.getCharPositionInLine() + 1
                 ));
             }
 
@@ -98,6 +100,18 @@ public class QuestDslParserFacade {
                     nodeIdToken.getLine(),
                     nodeIdToken.getCharPositionInLine() + 1
             );
+        }
+
+        private String toLineText(QuestDslParser.TextLineContentContext context) {
+            List<String> atoms = new ArrayList<>();
+            for (QuestDslParser.TextAtomContext atom : context.textAtom()) {
+                if (atom.STRING() != null) {
+                    atoms.add(stripQuotes(atom.STRING().getText()));
+                } else {
+                    atoms.add(atom.getText());
+                }
+            }
+            return String.join(" ", atoms).trim();
         }
 
         private String stripQuotes(String value) {

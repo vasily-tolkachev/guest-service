@@ -1,31 +1,49 @@
 grammar QuestDsl;
 
 questFile
-    : questDecl titleDecl nodeDecl+ EOF
+    : blankLines* questDecl blankLines* titleDecl (blankLines* nodeDecl)+ blankLines* EOF
     ;
 
 questDecl
-    : QUEST ID NEWLINE+
+    : QUEST WS+ ID endOfLine
     ;
 
 titleDecl
-    : TITLE STRING NEWLINE+
+    : TITLE WS+ STRING endOfLine
     ;
 
 nodeDecl
-    : NODE ID NEWLINE+ nodeBody
+    : NODE WS+ ID endOfLine nodeBody
     ;
 
 nodeBody
-    : textLine+ optionDecl*
+    : (blankLines* textLine)+ (blankLines* optionDecl)*
     ;
 
 textLine
-    : TEXT_LINE NEWLINE*
+    : textLineContent endOfLine
     ;
 
 optionDecl
-    : GT TEXT_LINE NEWLINE* ARROW ID NEWLINE*
+    : GT WS* textLineContent endOfLine ARROW WS* ID endOfLine
+    ;
+
+textLineContent
+    : textAtom (WS+ textAtom)*
+    ;
+
+textAtom
+    : ID
+    | STRING
+    | WORD
+    ;
+
+endOfLine
+    : WS* (NEWLINE+ | EOF)
+    ;
+
+blankLines
+    : WS* NEWLINE+
     ;
 
 QUEST: 'quest';
@@ -35,6 +53,6 @@ GT: '>';
 ARROW: '->';
 STRING: '"' (~["\r\n] | '\\"')* '"';
 ID: [a-zA-Z_][a-zA-Z0-9_-]*;
-TEXT_LINE: ~[\r\n]+;
+WORD: ~[ \t\r\n]+;
+WS: [ \t]+;
 NEWLINE: '\r'? '\n';
-WS: [ \t]+ -> skip;
