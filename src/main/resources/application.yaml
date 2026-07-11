@@ -3,3 +3,8 @@ spring:
     name: quest-service
 server:
   port: 8082
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui

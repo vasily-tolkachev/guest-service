@@ -1,0 +1,72 @@
+package com.myproject.questservice.application.service;
+
+import com.myproject.questservice.adapter.in.rest.dto.GameView;
+import com.myproject.questservice.adapter.in.rest.dto.OptionView;
+import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
+import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
+import com.myproject.questservice.application.port.in.QuestUseCase;
+import com.myproject.questservice.application.port.out.QuestCatalogPort;
+import com.myproject.questservice.application.port.out.SessionStorePort;
+import com.myproject.questservice.domain.GameState;
+import com.myproject.questservice.domain.Node;
+import com.myproject.questservice.domain.Quest;
+import com.myproject.questservice.domain.QuestEngine;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class QuestApplicationService implements QuestUseCase {
+
+    private final QuestCatalogPort questCatalogPort;
+    private final SessionStorePort sessionStorePort;
+
+    @Override
+    public List<QuestSummaryView> listQuests() {
+        return questCatalogPort.findAll()
+                .stream()
+                .map(quest -> new QuestSummaryView(quest.id(), quest.title()))
+                .toList();
+    }
+
+    @Override
+    public StartQuestResponse start(String questId) {
+        Quest quest = questCatalogPort.findById(questId)
+                .orElseThrow(() -> new NotFoundException("Quest not found: " + questId));
+        String sessionId = sessionStorePort.create(quest.id(), quest.startNodeId());
+        GameState gameState = sessionStorePort.findById(sessionId)
+                .orElseThrow(() -> new IllegalStateException("Session not found after create: " + sessionId));
+        QuestEngine engine = new QuestEngine(quest, gameState);
+        GameView view = toView(quest, engine, engine.start());
+        return new StartQuestResponse(sessionId, view);
+    }
+
+    @Override
+    public GameView choose(String sessionId, String optionId) {
+        if (optionId == null || optionId.isBlank()) {
+            throw new BadRequestException("optionId is required");
+        }
+        GameState state = sessionStorePort.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+        Quest quest = questCatalogPort.findById(state.getQuestId())
+                .orElseThrow(() -> new NotFoundException("Quest not found: " + state.getQuestId()));
+        try {
+            QuestEngine engine = new QuestEngine(quest, state);
+            Node node = engine.choose(optionId);
+            return toView(quest, engine, node);
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException(ex.getMessage());
+        }
+    }
+
+    private GameView toView(Quest quest, QuestEngine engine, Node node) {
+        return new GameView(
+                quest.title(),
+                node.text(),
+                node.options().stream().map(option -> new OptionView(option.id(), option.text())).toList(),
+                engine.isFinished(node)
+        );
+    }
+}
