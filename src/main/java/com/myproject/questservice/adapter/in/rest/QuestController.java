@@ -58,6 +58,11 @@ public class QuestController {
         return questUseCase.start(questId);
     }
 
+    @PostMapping("/{questId}/play")
+    public StartQuestResponse play(@PathVariable String questId) {
+        return questUseCase.start(questId);
+    }
+
     @GetMapping("/sessions/{sessionId}")
     public GameView getSession(@PathVariable String sessionId) {
         return questUseCase.getSession(sessionId);
@@ -66,6 +71,11 @@ public class QuestController {
     @PostMapping("/sessions/{sessionId}/choose")
     public GameView choose(@PathVariable String sessionId, @Valid @RequestBody ChooseOptionRequest request) {
         return questUseCase.choose(sessionId, request.optionId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/options/{optionId}")
+    public GameView chooseByPath(@PathVariable String sessionId, @PathVariable String optionId) {
+        return questUseCase.choose(sessionId, optionId);
     }
 
     @PostMapping("/sessions/{sessionId}/back")

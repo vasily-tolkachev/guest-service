@@ -2,6 +2,7 @@ package com.myproject.questservice.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.HashSet;
@@ -14,10 +15,9 @@ import java.util.Set;
 @Getter
 @Setter
 @AllArgsConstructor
+@NoArgsConstructor
 public class GameState {
 
-    private String sessionId;
-    private String questId;
     private String currentNodeId;
     private Set<String> facts;
     private Map<String, String> variables;
@@ -25,10 +25,8 @@ public class GameState {
     private Set<String> visitedNodes;
     private List<String> navigationHistory;
 
-    public GameState(String sessionId, String questId, String currentNodeId) {
+    public GameState(String currentNodeId) {
         this(
-                sessionId,
-                questId,
                 currentNodeId,
                 new HashSet<>(),
                 new HashMap<>(),

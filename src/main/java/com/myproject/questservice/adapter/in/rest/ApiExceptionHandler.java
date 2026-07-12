@@ -5,6 +5,7 @@ import com.myproject.questservice.adapter.out.dsl.error.DslProcessingException;
 import com.myproject.questservice.application.service.BadRequestException;
 import com.myproject.questservice.application.service.FileReadException;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.service.QuestChangedException;
 import com.myproject.questservice.application.service.QuestAlreadyExistsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,12 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleConflict(QuestAlreadyExistsException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiErrorResponse("QUEST_ALREADY_EXISTS", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(QuestChangedException.class)
+    public ResponseEntity<ApiErrorResponse> handleQuestChanged(QuestChangedException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse("QUEST_CHANGED", ex.getMessage(), null, null));
     }
 
     @ExceptionHandler(FileReadException.class)
