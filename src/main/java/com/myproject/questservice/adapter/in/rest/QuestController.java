@@ -1,6 +1,7 @@
 package com.myproject.questservice.adapter.in.rest;
 
 import com.myproject.questservice.adapter.in.rest.dto.GameView;
+import com.myproject.questservice.adapter.in.rest.dto.QuestSessionView;
 import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
 import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
@@ -33,6 +34,11 @@ public class QuestController {
         return questUseCase.listQuests();
     }
 
+    @GetMapping("/sessions")
+    public List<QuestSessionView> listMySessions() {
+        return questUseCase.listMySessions();
+    }
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public UploadQuestResponse uploadQuest(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
@@ -52,6 +58,11 @@ public class QuestController {
     @PostMapping("/{questId}/play")
     public StartQuestResponse play(@PathVariable String questId) {
         return questUseCase.play(questId);
+    }
+
+    @PostMapping("/sessions/{sessionId}/proceed")
+    public StartQuestResponse proceed(@PathVariable String sessionId) {
+        return questUseCase.proceed(sessionId);
     }
 
     @PostMapping("/sessions/{sessionId}/options/{optionId}")

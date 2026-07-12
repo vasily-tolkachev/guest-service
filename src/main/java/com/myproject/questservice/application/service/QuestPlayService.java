@@ -55,6 +55,19 @@ public class QuestPlayService {
         return new StartQuestResponse(session.getId().toString(), view);
     }
 
+    public StartQuestResponse proceed(String sessionId) {
+        QuestSession session = findUserSession(sessionId);
+        Quest quest = loadQuest(session.getQuestId());
+        GameState gameState = session.getGameState();
+        ensureCompatible(gameState, quest);
+        QuestEngine engine = new QuestEngine(quest, gameState);
+        Node node = quest.nodes().get(gameState.getCurrentNodeId());
+        if (node == null) {
+            throw new QuestChangedException("This quest has changed. Your current progress is incompatible.");
+        }
+        return new StartQuestResponse(session.getId().toString(), toView(quest, engine, node));
+    }
+
     public GameView chooseOption(String sessionId, String optionId) {
         if (optionId == null || optionId.isBlank()) {
             throw new BadRequestException("optionId is required");
