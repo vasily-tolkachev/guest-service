@@ -59,7 +59,7 @@ public class JpaQuestSessionRepositoryAdapter implements QuestSessionRepositoryP
         entity.setUserId(session.getUserId());
         entity.setQuestId(session.getQuestId());
         entity.setStatus(session.getStatus().name());
-        entity.setGameState(mapper.toJson(session.getGameState()));
+        entity.setGameState(mapper.toJsonNode(session.getGameState()));
         entity.setUpdatedAt(now);
         repository.save(entity);
     }

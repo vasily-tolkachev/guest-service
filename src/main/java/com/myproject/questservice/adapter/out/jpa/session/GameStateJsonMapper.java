@@ -1,6 +1,7 @@
 package com.myproject.questservice.adapter.out.jpa.session;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myproject.questservice.application.service.BadRequestException;
 import com.myproject.questservice.domain.GameState;
@@ -13,17 +14,13 @@ public class GameStateJsonMapper {
 
     private final ObjectMapper objectMapper;
 
-    public String toJson(GameState state) {
-        try {
-            return objectMapper.writeValueAsString(state);
-        } catch (JsonProcessingException ex) {
-            throw new BadRequestException("Unable to serialize game state");
-        }
+    public JsonNode toJsonNode(GameState state) {
+        return objectMapper.valueToTree(state);
     }
 
-    public GameState toDomain(String json) {
+    public GameState toDomain(JsonNode json) {
         try {
-            return objectMapper.readValue(json, GameState.class);
+            return objectMapper.treeToValue(json, GameState.class);
         } catch (JsonProcessingException ex) {
             throw new BadRequestException("Unable to deserialize game state");
         }

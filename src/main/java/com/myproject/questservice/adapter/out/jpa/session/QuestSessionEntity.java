@@ -1,11 +1,14 @@
 package com.myproject.questservice.adapter.out.jpa.session;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -28,8 +31,9 @@ public class QuestSessionEntity {
     @Column(name = "status", nullable = false)
     private String status;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "game_state", nullable = false, columnDefinition = "jsonb")
-    private String gameState;
+    private JsonNode gameState;
 
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;
