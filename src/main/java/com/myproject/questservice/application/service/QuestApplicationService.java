@@ -62,6 +62,11 @@ public class QuestApplicationService implements QuestUseCase {
     }
 
     @Override
+    public StartQuestResponse restart(String sessionId) {
+        return questPlayService.restart(sessionId);
+    }
+
+    @Override
     public GameView chooseOption(String sessionId, String optionId) {
         return questPlayService.chooseOption(sessionId, optionId);
     }

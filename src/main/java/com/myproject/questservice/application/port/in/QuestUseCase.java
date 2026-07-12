@@ -18,6 +18,8 @@ public interface QuestUseCase {
 
     StartQuestResponse proceed(String sessionId);
 
+    StartQuestResponse restart(String sessionId);
+
     GameView chooseOption(String sessionId, String optionId);
 
     UploadQuestResponse uploadQuest(String dslText);

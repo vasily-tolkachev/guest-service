@@ -65,6 +65,11 @@ public class QuestController {
         return questUseCase.proceed(sessionId);
     }
 
+    @PostMapping("/sessions/{sessionId}/restart")
+    public StartQuestResponse restart(@PathVariable String sessionId) {
+        return questUseCase.restart(sessionId);
+    }
+
     @PostMapping("/sessions/{sessionId}/options/{optionId}")
     public GameView chooseByPath(@PathVariable String sessionId, @PathVariable String optionId) {
         return questUseCase.chooseOption(sessionId, optionId);

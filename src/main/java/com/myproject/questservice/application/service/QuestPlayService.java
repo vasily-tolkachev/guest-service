@@ -68,6 +68,12 @@ public class QuestPlayService {
         return new StartQuestResponse(session.getId().toString(), toView(quest, engine, node));
     }
 
+    public StartQuestResponse restart(String sessionId) {
+        QuestSession session = findUserSession(sessionId);
+        sessionStorePort.delete(session.getId());
+        return play(session.getQuestId());
+    }
+
     public GameView chooseOption(String sessionId, String optionId) {
         if (optionId == null || optionId.isBlank()) {
             throw new BadRequestException("optionId is required");
