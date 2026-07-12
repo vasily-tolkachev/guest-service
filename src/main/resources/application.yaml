@@ -2,9 +2,9 @@ spring:
   application:
     name: quest-service
   datasource:
-    url: ${QUEST_DB_URL:jdbc:postgresql://localhost:5432/quest}
-    username: ${QUEST_DB_USERNAME:quest}
-    password: ${QUEST_DB_PASSWORD:quest}
+    url: ${DB_URL:${QUEST_DB_URL:jdbc:postgresql://localhost:5432/mastery}}
+    username: ${DB_USERNAME:${QUEST_DB_USERNAME:mastery}}
+    password: ${DB_PASSWORD:${QUEST_DB_PASSWORD:mastery}}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -13,8 +13,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        default_schema: quest
   flyway:
     enabled: true
+    baseline-on-migrate: true
+    schemas: quest
+    default-schema: quest
     locations: classpath:db/migration
   security:
     oauth2:

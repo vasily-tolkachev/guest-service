@@ -1,4 +1,6 @@
-CREATE TABLE IF NOT EXISTS quest_definition (
+CREATE SCHEMA IF NOT EXISTS quest;
+
+CREATE TABLE IF NOT EXISTS quest.quest_definition (
     id UUID PRIMARY KEY,
     quest_id VARCHAR(255) NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -8,9 +10,9 @@ CREATE TABLE IF NOT EXISTS quest_definition (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quest_definition_quest_id
-    ON quest_definition (quest_id);
+    ON quest.quest_definition (quest_id);
 
-CREATE TABLE IF NOT EXISTS quest_session (
+CREATE TABLE IF NOT EXISTS quest.quest_session (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     quest_id VARCHAR(255) NOT NULL,
@@ -21,7 +23,7 @@ CREATE TABLE IF NOT EXISTS quest_session (
 );
 
 CREATE INDEX IF NOT EXISTS idx_quest_session_user_id
-    ON quest_session (user_id);
+    ON quest.quest_session (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_quest_session_active_lookup
-    ON quest_session (user_id, quest_id, status);
+    ON quest.quest_session (user_id, quest_id, status);
