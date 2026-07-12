@@ -1,9 +1,8 @@
-package com.myproject.questservice.adapter.out.postgres.quest;
+package com.myproject.questservice.adapter.out.jpa.quest;
 
 import com.myproject.questservice.application.port.out.QuestRepositoryPort;
 import com.myproject.questservice.domain.QuestDefinition;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -11,9 +10,8 @@ import java.util.List;
 import java.util.UUID;
 
 @Component
-@Profile("!inmemory")
 @RequiredArgsConstructor
-public class PostgresQuestRepositoryAdapter implements QuestRepositoryPort {
+public class JpaQuestRepositoryAdapter implements QuestRepositoryPort {
 
     private final QuestDefinitionJpaRepository repository;
 

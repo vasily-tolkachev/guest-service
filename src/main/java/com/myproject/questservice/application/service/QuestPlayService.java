@@ -33,7 +33,7 @@ public class QuestPlayService {
     private final QuestDslValidator questDslValidator;
     private final QuestDslCompiler questDslCompiler;
 
-    public StartQuestResponse start(String questId) {
+    public StartQuestResponse play(String questId) {
         UUID userId = requireCurrentUserId();
         Quest quest = loadQuest(questId);
         QuestSession session = sessionStorePort.findActive(userId, quest.id()).orElse(null);
@@ -55,7 +55,7 @@ public class QuestPlayService {
         return new StartQuestResponse(session.getId().toString(), view);
     }
 
-    public GameView choose(String sessionId, String optionId) {
+    public GameView chooseOption(String sessionId, String optionId) {
         if (optionId == null || optionId.isBlank()) {
             throw new BadRequestException("optionId is required");
         }

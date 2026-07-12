@@ -1,4 +1,4 @@
-package com.myproject.questservice.adapter.out.postgres.session;
+package com.myproject.questservice.adapter.out.jpa.session;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

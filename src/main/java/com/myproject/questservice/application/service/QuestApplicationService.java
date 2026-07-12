@@ -1,44 +1,23 @@
 package com.myproject.questservice.application.service;
 
 import com.myproject.questservice.adapter.in.rest.dto.GameView;
-import com.myproject.questservice.adapter.in.rest.dto.OptionView;
-import com.myproject.questservice.adapter.in.rest.dto.QuestMapView;
 import com.myproject.questservice.adapter.in.rest.dto.QuestSummaryView;
 import com.myproject.questservice.adapter.in.rest.dto.StartQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
-import com.myproject.questservice.adapter.out.dsl.ast.QuestAst;
-import com.myproject.questservice.adapter.out.dsl.compiler.QuestDslCompiler;
-import com.myproject.questservice.adapter.out.dsl.parser.QuestDslParserFacade;
-import com.myproject.questservice.adapter.out.dsl.validator.QuestDslValidator;
 import com.myproject.questservice.application.port.in.QuestUseCase;
-import com.myproject.questservice.application.port.out.QuestSessionRepositoryPort;
 import com.myproject.questservice.application.port.out.QuestRepositoryPort;
-import com.myproject.questservice.auth.CurrentUserProvider;
-import com.myproject.questservice.domain.GameState;
-import com.myproject.questservice.domain.Node;
-import com.myproject.questservice.domain.Quest;
-import com.myproject.questservice.domain.QuestDefinition;
-import com.myproject.questservice.domain.QuestEngine;
-import com.myproject.questservice.domain.QuestSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class QuestApplicationService implements QuestUseCase {
 
     private final QuestRepositoryPort questRepositoryPort;
-    private final QuestSessionRepositoryPort sessionStorePort;
-    private final CurrentUserProvider currentUserProvider;
     private final QuestPlayService questPlayService;
-    private final QuestDefinitionValidationService questDefinitionValidationService;
-    private final QuestDslParserFacade questDslParserFacade;
-    private final QuestDslValidator questDslValidator;
-    private final QuestDslCompiler questDslCompiler;
+    private final QuestImportService questImportService;
 
     @Override
     public List<QuestSummaryView> listQuests() {
@@ -49,135 +28,18 @@ public class QuestApplicationService implements QuestUseCase {
     }
 
     @Override
-    public StartQuestResponse start(String questId) {
-        return questPlayService.start(questId);
+    public StartQuestResponse play(String questId) {
+        return questPlayService.play(questId);
     }
 
     @Override
-    public GameView getSession(String sessionId) {
-        QuestSession session = findUserSession(sessionId);
-        GameState state = session.getGameState();
-        Quest quest = loadQuest(session.getQuestId());
-        ensureCompatible(state, quest);
-        QuestEngine engine = new QuestEngine(quest, state);
-        Node node = quest.nodes().get(state.getCurrentNodeId());
-        if (node == null) {
-            throw new QuestChangedException("This quest has changed. Your current progress is incompatible.");
-        }
-        return toView(quest, engine, node);
-    }
-
-    @Override
-    public GameView choose(String sessionId, String optionId) {
-        return questPlayService.choose(sessionId, optionId);
-    }
-
-    @Override
-    public GameView back(String sessionId) {
-        QuestSession session = findUserSession(sessionId);
-        GameState state = session.getGameState();
-        Quest quest = loadQuest(session.getQuestId());
-        ensureCompatible(state, quest);
-        try {
-            QuestEngine engine = new QuestEngine(quest, state);
-            Node node = engine.goBack();
-            sessionStorePort.save(session);
-            return toView(quest, engine, node);
-        } catch (IllegalArgumentException ex) {
-            throw new BadRequestException(ex.getMessage());
-        }
-    }
-
-    @Override
-    public QuestMapView getMap(String sessionId) {
-        QuestSession session = findUserSession(sessionId);
-        GameState state = session.getGameState();
-        Quest quest = loadQuest(session.getQuestId());
-        ensureCompatible(state, quest);
-        QuestEngine engine = new QuestEngine(quest, state);
-        Node currentNode = quest.nodes().get(state.getCurrentNodeId());
-        if (currentNode == null) {
-            throw new QuestChangedException("This quest has changed. Your current progress is incompatible.");
-        }
-        List<String> available = engine.availableOptions(currentNode).stream()
-                .map(option -> option.transition().targetNodeId())
-                .distinct()
-                .sorted()
-                .toList();
-        return new QuestMapView(
-                state.getCurrentNodeId(),
-                state.getVisitedNodes().stream().sorted().toList(),
-                available
-        );
+    public GameView chooseOption(String sessionId, String optionId) {
+        return questPlayService.chooseOption(sessionId, optionId);
     }
 
     @Override
     public UploadQuestResponse uploadQuest(String dslText) {
-        if (dslText == null || dslText.isBlank()) {
-            throw new BadRequestException("DSL text is required");
-        }
-
-        QuestAst ast = questDslParserFacade.parse(dslText);
-        questDslValidator.validate(ast);
-        Quest quest = questDslCompiler.compile(ast);
-        questDefinitionValidationService.validate(quest);
-        questRepositoryPort.save(new QuestDefinition(quest.id(), quest.title(), dslText));
-        return new UploadQuestResponse(quest.id(), quest.title());
+        return questImportService.uploadQuest(dslText);
     }
 
-    private GameView toView(Quest quest, QuestEngine engine, Node node) {
-        GameState state = engine.gameState();
-        return new GameView(
-                quest.title(),
-                node.id(),
-                node.title(),
-                node.text(),
-                engine.availableOptions(node).stream()
-                        .map(option -> new OptionView(option.id(), option.text()))
-                        .toList(),
-                state.getInventory().stream().sorted().toList(),
-                Map.copyOf(state.getVariables()),
-                state.getVisitedNodes().stream().sorted().toList(),
-                engine.canGoBack(),
-                engine.isFinished(node)
-        );
-    }
-
-    private QuestSession findUserSession(String sessionId) {
-        UUID userId = requireCurrentUserId();
-        UUID parsedSessionId = parseSessionId(sessionId);
-        QuestSession session = sessionStorePort.findById(parsedSessionId)
-                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
-        if (!session.getUserId().equals(userId)) {
-            throw new NotFoundException("Session not found: " + sessionId);
-        }
-        return session;
-    }
-
-    private Quest loadQuest(String questId) {
-        QuestDefinition definition = questRepositoryPort.findByQuestId(questId)
-                .orElseThrow(() -> new NotFoundException("Quest not found: " + questId));
-        QuestAst ast = questDslParserFacade.parse(definition.dsl());
-        questDslValidator.validate(ast);
-        return questDslCompiler.compile(ast);
-    }
-
-    private UUID requireCurrentUserId() {
-        return currentUserProvider.currentUserId()
-                .orElseThrow(() -> new BadRequestException("Unable to resolve current user"));
-    }
-
-    private void ensureCompatible(GameState state, Quest quest) {
-        if (!quest.nodes().containsKey(state.getCurrentNodeId())) {
-            throw new QuestChangedException("This quest has changed. Your current progress is incompatible.");
-        }
-    }
-
-    private UUID parseSessionId(String sessionId) {
-        try {
-            return UUID.fromString(sessionId);
-        } catch (IllegalArgumentException ex) {
-            throw new BadRequestException("Invalid sessionId format");
-        }
-    }
 }

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS quest_session (
     user_id UUID NOT NULL,
     quest_id VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL,
-    game_state_json TEXT NOT NULL,
+    game_state JSONB NOT NULL,
     started_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 );

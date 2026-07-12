@@ -1,4 +1,4 @@
-package com.myproject.questservice.adapter.out.postgres.session;
+package com.myproject.questservice.adapter.out.jpa.session;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,8 +28,8 @@ public class QuestSessionEntity {
     @Column(name = "status", nullable = false)
     private String status;
 
-    @Column(name = "game_state_json", nullable = false, columnDefinition = "text")
-    private String gameStateJson;
+    @Column(name = "game_state", nullable = false, columnDefinition = "jsonb")
+    private String gameState;
 
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;

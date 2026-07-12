@@ -1,4 +1,4 @@
-package com.myproject.questservice.adapter.out.postgres.quest;
+package com.myproject.questservice.adapter.out.jpa.quest;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
