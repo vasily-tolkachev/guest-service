@@ -1,6 +1,11 @@
 spring:
   application:
     name: quest-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${auth.jwt-validation.jwks-uri}
 server:
   port: 8082
 springdoc:
@@ -8,3 +13,6 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui
+auth:
+  jwt-validation:
+    jwks-uri: ${AUTH_JWKS_URI:http://127.0.0.1:8081/.well-known/jwks.json}
