@@ -160,7 +160,13 @@ public class FactsStageRunner implements StepStageRunner {
             throw new ConflictException("Unsupported FACTS step: " + step);
         }
 
-        return assembleFactsArtifact(listOutput, ownersOutput, dependenciesOutput, visibilityOutput, stepOutputs);
+        return assembleFactsArtifact(listOutput, ownersOutput, dependenciesOutput, visibilityOutput);
+    }
+
+    @Override
+    public boolean isStepCompleted(String step, JsonNode currentOutput) {
+        ObjectNode stepOutputs = currentStepOutputs(currentOutput);
+        return stepOutputs.has(step);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -202,8 +208,7 @@ public class FactsStageRunner implements StepStageRunner {
             JsonNode listOutput,
             JsonNode ownersOutput,
             JsonNode dependenciesOutput,
-            JsonNode visibilityOutput,
-            ObjectNode stepOutputs
+            JsonNode visibilityOutput
     ) {
         Map<String, JsonNode> ownerById = mapById(ownersOutput.path("owners"));
         Map<String, JsonNode> depsById = mapById(dependenciesOutput.path("dependencies"));
@@ -213,7 +218,7 @@ public class FactsStageRunner implements StepStageRunner {
         JsonNode facts = listOutput.path("facts");
         if (facts.isArray()) {
             for (JsonNode fact : facts) {
-                String id = fact.path("id").asText("");
+                String id = normalizeFactId(fact.path("id").asText(""));
                 if (id.isBlank()) {
                     continue;
                 }
@@ -230,7 +235,7 @@ public class FactsStageRunner implements StepStageRunner {
                 JsonNode unlocksNode = depNode == null ? null : depNode.path("unlocks");
                 if (unlocksNode != null && unlocksNode.isArray()) {
                     for (JsonNode unlock : unlocksNode) {
-                        String unlockId = unlock.asText("");
+                        String unlockId = normalizeFactId(unlock.asText(""));
                         if (!unlockId.isBlank() && !unlockId.equals(id)) {
                             unlocks.add(unlockId);
                         }
@@ -248,15 +253,81 @@ public class FactsStageRunner implements StepStageRunner {
 
         ObjectNode result = objectMapper.createObjectNode();
         result.set("facts", factsResult);
-        result.set("step_outputs", stepOutputs);
         return result;
     }
 
     private ObjectNode currentStepOutputs(JsonNode currentOutput) {
+        if (currentOutput != null && currentOutput.path("facts").isArray()) {
+            return deriveStepOutputsFromFacts(currentOutput.path("facts"));
+        }
         if (currentOutput != null && currentOutput.path("step_outputs").isObject()) {
             return (ObjectNode) currentOutput.path("step_outputs").deepCopy();
         }
         return objectMapper.createObjectNode();
+    }
+
+    private ObjectNode deriveStepOutputsFromFacts(JsonNode facts) {
+        ObjectNode stepOutputs = objectMapper.createObjectNode();
+        ArrayNode listFacts = objectMapper.createArrayNode();
+        ArrayNode owners = objectMapper.createArrayNode();
+        ArrayNode dependencies = objectMapper.createArrayNode();
+        ArrayNode visibility = objectMapper.createArrayNode();
+
+        for (JsonNode fact : facts) {
+            String id = normalizeFactId(fact.path("id").asText(""));
+            if (id.isBlank()) {
+                continue;
+            }
+
+            ObjectNode listFact = objectMapper.createObjectNode();
+            listFact.put("id", id);
+            listFact.put("description", fact.path("description").asText(""));
+            listFact.put("mandatory", fact.path("mandatory").asBoolean(true));
+            listFacts.add(listFact);
+
+            ObjectNode owner = objectMapper.createObjectNode();
+            owner.put("id", id);
+            owner.put("owner", fact.path("owner").asText(""));
+            owners.add(owner);
+
+            ObjectNode dependency = objectMapper.createObjectNode();
+            dependency.put("id", id);
+            ArrayNode unlocks = objectMapper.createArrayNode();
+            JsonNode unlocksNode = fact.path("unlocks");
+            if (unlocksNode.isArray()) {
+                for (JsonNode unlock : unlocksNode) {
+                    String unlockId = normalizeFactId(unlock.asText(""));
+                    if (!unlockId.isBlank() && !unlockId.equals(id)) {
+                        unlocks.add(unlockId);
+                    }
+                }
+            }
+            dependency.set("unlocks", unlocks);
+            dependencies.add(dependency);
+
+            ObjectNode vis = objectMapper.createObjectNode();
+            vis.put("id", id);
+            vis.put("visibility", fact.path("visibility").asText("contested"));
+            vis.put("interpretation_risk", fact.path("interpretation_risk").asText(""));
+            visibility.add(vis);
+        }
+
+        ObjectNode factListNode = objectMapper.createObjectNode();
+        factListNode.set("facts", listFacts);
+        stepOutputs.set("fact_list", factListNode);
+
+        ObjectNode ownerNode = objectMapper.createObjectNode();
+        ownerNode.set("owners", owners);
+        stepOutputs.set("fact_owners", ownerNode);
+
+        ObjectNode depNode = objectMapper.createObjectNode();
+        depNode.set("dependencies", dependencies);
+        stepOutputs.set("fact_dependencies", depNode);
+
+        ObjectNode visNode = objectMapper.createObjectNode();
+        visNode.set("visibility", visibility);
+        stepOutputs.set("fact_visibility", visNode);
+        return stepOutputs;
     }
 
     private void ensureFactsPresent(JsonNode listOutput) {
@@ -271,12 +342,21 @@ public class FactsStageRunner implements StepStageRunner {
             return map;
         }
         for (JsonNode node : arrayNode) {
-            String id = node.path("id").asText("");
+            String id = normalizeFactId(node.path("id").asText(""));
             if (!id.isBlank()) {
                 map.put(id, node);
             }
         }
         return map;
+    }
+
+    private String normalizeFactId(String id) {
+        if (id == null || id.isBlank()) {
+            return "";
+        }
+        return id.trim()
+                .replace('Ф', 'F')
+                .replace('ф', 'F');
     }
 
     private String compactJson(JsonNode json) {

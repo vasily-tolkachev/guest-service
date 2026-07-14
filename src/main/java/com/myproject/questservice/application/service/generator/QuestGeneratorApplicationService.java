@@ -206,9 +206,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private String nextStep(StepStageRunner stepRunner, QuestProject project, StageType stageType) {
         QuestStage stage = getRequiredStage(project, stageType);
         JsonNode output = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
-        JsonNode stepOutputs = output == null ? null : output.path("step_outputs");
         for (String step : stepRunner.steps()) {
-            if (stepOutputs == null || !stepOutputs.has(step)) {
+            if (!stepRunner.isStepCompleted(step, output)) {
                 return step;
             }
         }

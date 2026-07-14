@@ -26,15 +26,15 @@ public class FlowStageRunner implements StepStageRunner {
     private static final int MAX_CONTEXT_CHARS = 7_000;
 
     private static final String SYSTEM_PROMPT_NODE_LIST = """
-            Ты генератор списка узлов для стадии QUEST_GRAPH.
-            Верни только валидный JSON.
-            Все строковые поля должны быть на русском языке.
+            Ты генератор структуры узлов для стадии QUEST_GRAPH (Quest Structure).
+            Верни только валидный JSON. Все строковые поля должны быть на русском языке.
 
             Верни схему:
             {
               "nodes": [
                 {
                   "id": "N1",
+                  "title": "",
                   "purpose": ""
                 }
               ]
@@ -43,9 +43,8 @@ public class FlowStageRunner implements StepStageRunner {
             """;
 
     private static final String SYSTEM_PROMPT_NODE_DETAILS = """
-            Ты генератор деталей узлов для стадии QUEST_GRAPH.
-            Верни только валидный JSON.
-            Все строковые поля должны быть на русском языке.
+            Ты генератор деталей узлов для стадии QUEST_GRAPH (Quest Structure).
+            Верни только валидный JSON. Все строковые поля должны быть на русском языке.
 
             Для каждого узла добавь:
             - required_facts
@@ -59,16 +58,15 @@ public class FlowStageRunner implements StepStageRunner {
                   "id": "N1",
                   "required_facts": ["F1"],
                   "revealed_facts": ["F2"],
-                  "participants": ["роль"]
+                  "participants": ["NPC01"]
                 }
               ]
             }
             """;
 
     private static final String SYSTEM_PROMPT_EDGES = """
-            Ты генератор переходов графа для стадии QUEST_GRAPH.
-            Верни только валидный JSON.
-            Все строковые поля должны быть на русском языке.
+            Ты генератор переходов графа для стадии QUEST_GRAPH (Quest Structure).
+            Верни только валидный JSON. Все строковые поля должны быть на русском языке.
 
             Для каждого узла создай 1-3 выбора:
             - text
@@ -89,21 +87,21 @@ public class FlowStageRunner implements StepStageRunner {
             """;
 
     private static final String SYSTEM_PROMPT_ENDINGS = """
-            Ты генератор финалов для стадии QUEST_GRAPH.
+            Ты генератор финальных узлов для стадии QUEST_GRAPH (Quest Structure).
             Верни только валидный JSON.
-            Все строковые поля должны быть на русском языке.
 
             Верни схему:
             {
-              "endings": [""]
+              "ending_nodes": ["N12"]
             }
-            Сгенерируй 2-4 варианта финала.
+            Выбери 1-4 id финальных узлов из списка уже существующих nodes.
             """;
+
+    private static final List<String> STEPS = List.of("node_list", "node_details", "edges", "endings");
 
     private final ProjectRepository projectRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
-    private static final List<String> STEPS = List.of("node_list", "node_details", "edges", "endings");
 
     @Override
     public StageType type() {
@@ -149,33 +147,37 @@ public class FlowStageRunner implements StepStageRunner {
             stepOutputs.set("node_list", nodeListOutput);
         } else if ("node_details".equals(step)) {
             ensureNodesPresent(nodeListOutput);
-            String nodesContext = compactJson(nodeListOutput.path("nodes"));
             detailsOutput = aiClient.generate(
                     SYSTEM_PROMPT_NODE_DETAILS,
-                    baseContext + "\n\nnodes:\n" + nodesContext + "\n\nfacts:\n" + compactJson(factsStage.getCurrentRevision().outputJson().path("facts"))
+                    baseContext + "\n\nnodes:\n" + compactJson(nodeListOutput.path("nodes"))
+                            + "\n\nfacts:\n" + compactJson(factsStage.getCurrentRevision().outputJson().path("facts"))
             );
             stepOutputs.set("node_details", detailsOutput);
         } else if ("edges".equals(step)) {
             ensureNodesPresent(nodeListOutput);
-            String nodesContext = compactJson(nodeListOutput.path("nodes"));
             edgesOutput = aiClient.generate(
                     SYSTEM_PROMPT_EDGES,
-                    baseContext + "\n\nnodes:\n" + nodesContext
+                    baseContext + "\n\nnodes:\n" + compactJson(nodeListOutput.path("nodes"))
             );
             stepOutputs.set("edges", edgesOutput);
         } else if ("endings".equals(step)) {
             ensureNodesPresent(nodeListOutput);
-            String nodesContext = compactJson(nodeListOutput.path("nodes"));
             endingsOutput = aiClient.generate(
                     SYSTEM_PROMPT_ENDINGS,
-                    baseContext + "\n\nnodes:\n" + nodesContext
+                    baseContext + "\n\nnodes:\n" + compactJson(nodeListOutput.path("nodes"))
             );
             stepOutputs.set("endings", endingsOutput);
         } else {
             throw new ConflictException("Unsupported QUEST_GRAPH step: " + step);
         }
 
-        return assembleGraph(nodeListOutput, detailsOutput, edgesOutput, endingsOutput, stepOutputs);
+        return assembleGraph(nodeListOutput, detailsOutput, edgesOutput, endingsOutput);
+    }
+
+    @Override
+    public boolean isStepCompleted(String step, JsonNode currentOutput) {
+        ObjectNode stepOutputs = currentStepOutputs(currentOutput);
+        return stepOutputs.has(step);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -227,8 +229,7 @@ public class FlowStageRunner implements StepStageRunner {
             JsonNode nodeListOutput,
             JsonNode detailsOutput,
             JsonNode edgesOutput,
-            JsonNode endingsOutput,
-            ObjectNode stepOutputs
+            JsonNode endingsOutput
     ) {
         Map<String, JsonNode> detailsById = mapById(detailsOutput.path("node_details"));
         Map<String, JsonNode> edgesById = mapById(edgesOutput.path("edges"));
@@ -241,8 +242,10 @@ public class FlowStageRunner implements StepStageRunner {
                 if (id.isBlank()) {
                     continue;
                 }
+
                 ObjectNode merged = objectMapper.createObjectNode();
                 merged.put("id", id);
+                merged.put("title", node.path("title").asText(""));
                 merged.put("purpose", node.path("purpose").asText(""));
 
                 JsonNode details = detailsById.get(id);
@@ -252,24 +255,77 @@ public class FlowStageRunner implements StepStageRunner {
 
                 JsonNode edge = edgesById.get(id);
                 merged.set("choices", copyArray(edge == null ? null : edge.path("choices")));
-
                 nodesResult.add(merged);
             }
         }
 
         ObjectNode result = objectMapper.createObjectNode();
         result.set("nodes", nodesResult);
-        result.set("endings", copyArray(endingsOutput.path("endings")));
-        result.set("step_outputs", stepOutputs);
-
+        result.set("ending_nodes", copyArray(endingsOutput.path("ending_nodes")));
         return result;
     }
 
     private ObjectNode currentStepOutputs(JsonNode currentOutput) {
+        if (currentOutput != null && currentOutput.path("nodes").isArray()) {
+            return deriveStepOutputsFromGraph(currentOutput);
+        }
         if (currentOutput != null && currentOutput.path("step_outputs").isObject()) {
             return (ObjectNode) currentOutput.path("step_outputs").deepCopy();
         }
         return objectMapper.createObjectNode();
+    }
+
+    private ObjectNode deriveStepOutputsFromGraph(JsonNode currentOutput) {
+        ObjectNode stepOutputs = objectMapper.createObjectNode();
+        JsonNode nodes = currentOutput.path("nodes");
+
+        ArrayNode nodeList = objectMapper.createArrayNode();
+        ArrayNode nodeDetails = objectMapper.createArrayNode();
+        ArrayNode edges = objectMapper.createArrayNode();
+
+        if (nodes.isArray()) {
+            for (JsonNode node : nodes) {
+                String id = node.path("id").asText("");
+                if (id.isBlank()) {
+                    continue;
+                }
+
+                ObjectNode listNode = objectMapper.createObjectNode();
+                listNode.put("id", id);
+                listNode.put("title", node.path("title").asText(""));
+                listNode.put("purpose", node.path("purpose").asText(""));
+                nodeList.add(listNode);
+
+                ObjectNode detailNode = objectMapper.createObjectNode();
+                detailNode.put("id", id);
+                detailNode.set("required_facts", copyArray(node.path("required_facts")));
+                detailNode.set("revealed_facts", copyArray(node.path("revealed_facts")));
+                detailNode.set("participants", copyArray(node.path("participants")));
+                nodeDetails.add(detailNode);
+
+                ObjectNode edgeNode = objectMapper.createObjectNode();
+                edgeNode.put("id", id);
+                edgeNode.set("choices", copyArray(node.path("choices")));
+                edges.add(edgeNode);
+            }
+        }
+
+        ObjectNode nodeListNode = objectMapper.createObjectNode();
+        nodeListNode.set("nodes", nodeList);
+        stepOutputs.set("node_list", nodeListNode);
+
+        ObjectNode detailsNode = objectMapper.createObjectNode();
+        detailsNode.set("node_details", nodeDetails);
+        stepOutputs.set("node_details", detailsNode);
+
+        ObjectNode edgesNode = objectMapper.createObjectNode();
+        edgesNode.set("edges", edges);
+        stepOutputs.set("edges", edgesNode);
+
+        ObjectNode endingsNode = objectMapper.createObjectNode();
+        endingsNode.set("ending_nodes", copyArray(currentOutput.path("ending_nodes")));
+        stepOutputs.set("endings", endingsNode);
+        return stepOutputs;
     }
 
     private void ensureNodesPresent(JsonNode nodeListOutput) {
