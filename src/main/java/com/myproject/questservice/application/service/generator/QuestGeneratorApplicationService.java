@@ -182,6 +182,17 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return flowDslExportService.toDsl(project.getName(), graphStage.getCurrentRevision().outputJson());
     }
 
+    @Override
+    public String convertDsl(String projectName, JsonNode questGraphJson) {
+        if (questGraphJson == null || questGraphJson.isNull()) {
+            throw new BadRequestException("questGraphJson is required");
+        }
+        String normalizedProjectName = (projectName == null || projectName.isBlank())
+                ? "manual_import"
+                : projectName.trim();
+        return flowDslExportService.toDsl(normalizedProjectName, questGraphJson);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));

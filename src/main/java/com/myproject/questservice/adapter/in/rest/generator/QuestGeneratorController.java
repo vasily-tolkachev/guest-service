@@ -1,5 +1,6 @@
 package com.myproject.questservice.adapter.in.rest.generator;
 
+import com.myproject.questservice.adapter.in.rest.dto.generator.ConvertDslRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.CreateProjectRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
@@ -59,5 +60,10 @@ public class QuestGeneratorController {
     @PostMapping(value = "/{id}/export-dsl", produces = MediaType.TEXT_PLAIN_VALUE)
     public String exportDsl(@PathVariable UUID id) {
         return questGeneratorUseCase.exportDsl(id);
+    }
+
+    @PostMapping(value = "/convert-dsl", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String convertDsl(@RequestBody ConvertDslRequest request) {
+        return questGeneratorUseCase.convertDsl(request.projectName(), request.questGraphJson());
     }
 }

@@ -2,6 +2,7 @@ package com.myproject.questservice.application.port.in.generator;
 
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
 import com.myproject.questservice.domain.generator.StageType;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,4 +21,6 @@ public interface QuestGeneratorUseCase {
     QuestProjectView approveStage(UUID projectId, StageType stageType);
 
     String exportDsl(UUID projectId);
+
+    String convertDsl(String projectName, JsonNode questGraphJson);
 }
