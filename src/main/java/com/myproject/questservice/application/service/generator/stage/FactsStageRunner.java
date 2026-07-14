@@ -17,6 +17,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class FactsStageRunner implements StageRunner {
+    private static final int MAX_CONTEXT_CHARS = 6_000;
     private static final String SYSTEM_PROMPT = """
             You are a Fact Graph Design Generator for a quest generation pipeline.
 
@@ -116,9 +117,17 @@ public class FactsStageRunner implements StageRunner {
                 """.formatted(
                 project.getName(),
                 style,
-                mysteryJson.toString(),
-                worldJson.toString(),
-                npcJson.toString()
+                compactJson(mysteryJson),
+                compactJson(worldJson),
+                compactJson(npcJson)
         );
+    }
+
+    private String compactJson(JsonNode json) {
+        String raw = json == null ? "{}" : json.toString();
+        if (raw.length() <= MAX_CONTEXT_CHARS) {
+            return raw;
+        }
+        return raw.substring(0, MAX_CONTEXT_CHARS) + "...";
     }
 }
