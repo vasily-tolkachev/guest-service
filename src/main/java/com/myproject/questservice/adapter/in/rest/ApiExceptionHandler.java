@@ -3,8 +3,10 @@ package com.myproject.questservice.adapter.in.rest;
 import com.myproject.questservice.adapter.in.rest.dto.ApiErrorResponse;
 import com.myproject.questservice.adapter.out.dsl.error.DslProcessingException;
 import com.myproject.questservice.application.service.BadRequestException;
+import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.FileReadException;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.service.NotImplementedException;
 import com.myproject.questservice.application.service.QuestChangedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,18 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleBadRequest(BadRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiErrorResponse("BAD_REQUEST", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleConflict(ConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse("CONFLICT", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(NotImplementedException.class)
+    public ResponseEntity<ApiErrorResponse> handleNotImplemented(NotImplementedException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                .body(new ApiErrorResponse("NOT_IMPLEMENTED", ex.getMessage(), null, null));
     }
 
     @ExceptionHandler(QuestChangedException.class)
