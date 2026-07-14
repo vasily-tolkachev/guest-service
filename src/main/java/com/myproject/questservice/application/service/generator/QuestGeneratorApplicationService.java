@@ -12,6 +12,7 @@ import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.application.service.NotImplementedException;
 import com.myproject.questservice.application.service.generator.stage.StageRunner;
 import com.myproject.questservice.application.service.generator.stage.StageRunnerRegistry;
+import com.myproject.questservice.application.service.generator.stage.StepStageRunner;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
 import com.myproject.questservice.domain.generator.StageRevision;
@@ -70,15 +71,18 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     @Override
     public QuestProjectView generateStage(UUID projectId, StageType stageType) {
+        StageRunner runner = stageRunnerRegistry.find(stageType)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
+        if (runner instanceof StepStageRunner stepRunner) {
+            return generateStageStep(projectId, stageType, nextStep(stepRunner, getRequiredProject(projectId), stageType));
+        }
+
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, stageType);
         if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
             throw new ConflictException("Stage is not ready for generation: " + stageType);
         }
         StageStatus previousStatus = stage.getStatus();
-
-        StageRunner runner = stageRunnerRegistry.find(stageType)
-                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
 
         stage.setStatus(StageStatus.GENERATING);
         JsonNode output;
@@ -129,6 +133,46 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public QuestProjectView generateStageStep(UUID projectId, StageType stageType, String step) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, stageType);
+        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
+            throw new ConflictException("Stage is not ready for generation: " + stageType);
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(stageType)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
+        if (!(runner instanceof StepStageRunner stepRunner)) {
+            throw new ConflictException("Stage does not support step generation: " + stageType);
+        }
+        if (!stepRunner.steps().contains(step)) {
+            throw new ConflictException("Unknown step for stage " + stageType + ": " + step);
+        }
+
+        StageStatus previousStatus = stage.getStatus();
+        stage.setStatus(StageStatus.GENERATING);
+
+        JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = stepRunner.generateStep(projectId, step, currentOutput);
+        } catch (RuntimeException ex) {
+            stage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = stage.getCurrentRevision() == null
+                ? 1
+                : stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, output, Instant.now()));
+        stage.setApproved(false);
+        stage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
     public String exportDsl(UUID projectId) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage graphStage = getRequiredStage(project, StageType.QUEST_GRAPH);
@@ -146,6 +190,18 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private QuestStage getRequiredStage(QuestProject project, StageType type) {
         return project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
+    }
+
+    private String nextStep(StepStageRunner stepRunner, QuestProject project, StageType stageType) {
+        QuestStage stage = getRequiredStage(project, stageType);
+        JsonNode output = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
+        JsonNode stepOutputs = output == null ? null : output.path("step_outputs");
+        for (String step : stepRunner.steps()) {
+            if (stepOutputs == null || !stepOutputs.has(step)) {
+                return step;
+            }
+        }
+        return stepRunner.steps().get(stepRunner.steps().size() - 1);
     }
 
     private QuestProjectView toView(QuestProject project) {

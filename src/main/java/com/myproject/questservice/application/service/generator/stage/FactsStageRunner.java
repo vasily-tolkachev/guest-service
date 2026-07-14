@@ -16,12 +16,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class FactsStageRunner implements StageRunner {
+public class FactsStageRunner implements StepStageRunner {
     private static final int MAX_CONTEXT_CHARS = 6_000;
 
     private static final String SYSTEM_PROMPT_LIST = """
@@ -101,6 +102,7 @@ public class FactsStageRunner implements StageRunner {
     private final ProjectRepository projectRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
+    private static final List<String> STEPS = List.of("fact_list", "fact_owners", "fact_dependencies", "fact_visibility");
 
     @Override
     public StageType type() {
@@ -108,7 +110,17 @@ public class FactsStageRunner implements StageRunner {
     }
 
     @Override
+    public List<String> steps() {
+        return STEPS;
+    }
+
+    @Override
     public JsonNode generate(UUID projectId) {
+        return generateStep(projectId, "fact_list", null);
+    }
+
+    @Override
+    public JsonNode generateStep(UUID projectId, String step, JsonNode currentOutput) {
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
@@ -123,12 +135,32 @@ public class FactsStageRunner implements StageRunner {
                 npcStage.getCurrentRevision().outputJson()
         );
 
-        JsonNode listOutput = aiClient.generate(SYSTEM_PROMPT_LIST, baseContext);
-        JsonNode ownersOutput = aiClient.generate(SYSTEM_PROMPT_OWNERS, baseContext + "\n\nfacts:\n" + compactJson(listOutput.path("facts")));
-        JsonNode dependenciesOutput = aiClient.generate(SYSTEM_PROMPT_DEPENDENCIES, baseContext + "\n\nfacts:\n" + compactJson(listOutput.path("facts")));
-        JsonNode visibilityOutput = aiClient.generate(SYSTEM_PROMPT_VISIBILITY, baseContext + "\n\nfacts:\n" + compactJson(listOutput.path("facts")));
+        ObjectNode stepOutputs = currentStepOutputs(currentOutput);
+        JsonNode listOutput = stepOutputs.path("fact_list");
+        JsonNode ownersOutput = stepOutputs.path("fact_owners");
+        JsonNode dependenciesOutput = stepOutputs.path("fact_dependencies");
+        JsonNode visibilityOutput = stepOutputs.path("fact_visibility");
 
-        return assembleFactsArtifact(listOutput, ownersOutput, dependenciesOutput, visibilityOutput);
+        if ("fact_list".equals(step)) {
+            listOutput = aiClient.generate(SYSTEM_PROMPT_LIST, baseContext);
+            stepOutputs.set("fact_list", listOutput);
+        } else if ("fact_owners".equals(step)) {
+            ensureFactsPresent(listOutput);
+            ownersOutput = aiClient.generate(SYSTEM_PROMPT_OWNERS, baseContext + "\n\nfacts:\n" + compactJson(listOutput.path("facts")));
+            stepOutputs.set("fact_owners", ownersOutput);
+        } else if ("fact_dependencies".equals(step)) {
+            ensureFactsPresent(listOutput);
+            dependenciesOutput = aiClient.generate(SYSTEM_PROMPT_DEPENDENCIES, baseContext + "\n\nfacts:\n" + compactJson(listOutput.path("facts")));
+            stepOutputs.set("fact_dependencies", dependenciesOutput);
+        } else if ("fact_visibility".equals(step)) {
+            ensureFactsPresent(listOutput);
+            visibilityOutput = aiClient.generate(SYSTEM_PROMPT_VISIBILITY, baseContext + "\n\nfacts:\n" + compactJson(listOutput.path("facts")));
+            stepOutputs.set("fact_visibility", visibilityOutput);
+        } else {
+            throw new ConflictException("Unsupported FACTS step: " + step);
+        }
+
+        return assembleFactsArtifact(listOutput, ownersOutput, dependenciesOutput, visibilityOutput, stepOutputs);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -170,7 +202,8 @@ public class FactsStageRunner implements StageRunner {
             JsonNode listOutput,
             JsonNode ownersOutput,
             JsonNode dependenciesOutput,
-            JsonNode visibilityOutput
+            JsonNode visibilityOutput,
+            ObjectNode stepOutputs
     ) {
         Map<String, JsonNode> ownerById = mapById(ownersOutput.path("owners"));
         Map<String, JsonNode> depsById = mapById(dependenciesOutput.path("dependencies"));
@@ -215,13 +248,21 @@ public class FactsStageRunner implements StageRunner {
 
         ObjectNode result = objectMapper.createObjectNode();
         result.set("facts", factsResult);
-        ObjectNode stepOutputs = objectMapper.createObjectNode();
-        stepOutputs.set("fact_list", listOutput);
-        stepOutputs.set("fact_owners", ownersOutput);
-        stepOutputs.set("fact_dependencies", dependenciesOutput);
-        stepOutputs.set("fact_visibility", visibilityOutput);
         result.set("step_outputs", stepOutputs);
         return result;
+    }
+
+    private ObjectNode currentStepOutputs(JsonNode currentOutput) {
+        if (currentOutput != null && currentOutput.path("step_outputs").isObject()) {
+            return (ObjectNode) currentOutput.path("step_outputs").deepCopy();
+        }
+        return objectMapper.createObjectNode();
+    }
+
+    private void ensureFactsPresent(JsonNode listOutput) {
+        if (!listOutput.path("facts").isArray() || listOutput.path("facts").isEmpty()) {
+            throw new ConflictException("FACTS step requires generated fact_list first");
+        }
     }
 
     private Map<String, JsonNode> mapById(JsonNode arrayNode) {
@@ -246,4 +287,3 @@ public class FactsStageRunner implements StageRunner {
         return raw.substring(0, MAX_CONTEXT_CHARS) + "...";
     }
 }
-

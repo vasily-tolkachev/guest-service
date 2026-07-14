@@ -16,12 +16,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class FlowStageRunner implements StageRunner {
+public class FlowStageRunner implements StepStageRunner {
     private static final int MAX_CONTEXT_CHARS = 7_000;
 
     private static final String SYSTEM_PROMPT_NODE_LIST = """
@@ -102,6 +103,7 @@ public class FlowStageRunner implements StageRunner {
     private final ProjectRepository projectRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
+    private static final List<String> STEPS = List.of("node_list", "node_details", "edges", "endings");
 
     @Override
     public StageType type() {
@@ -109,7 +111,17 @@ public class FlowStageRunner implements StageRunner {
     }
 
     @Override
+    public List<String> steps() {
+        return STEPS;
+    }
+
+    @Override
     public JsonNode generate(UUID projectId) {
+        return generateStep(projectId, "node_list", null);
+    }
+
+    @Override
+    public JsonNode generateStep(UUID projectId, String step, JsonNode currentOutput) {
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
@@ -126,25 +138,44 @@ public class FlowStageRunner implements StageRunner {
                 factsStage.getCurrentRevision().outputJson()
         );
 
-        JsonNode nodeListOutput = aiClient.generate(SYSTEM_PROMPT_NODE_LIST, baseContext);
-        String nodesContext = compactJson(nodeListOutput.path("nodes"));
+        ObjectNode stepOutputs = currentStepOutputs(currentOutput);
+        JsonNode nodeListOutput = stepOutputs.path("node_list");
+        JsonNode detailsOutput = stepOutputs.path("node_details");
+        JsonNode edgesOutput = stepOutputs.path("edges");
+        JsonNode endingsOutput = stepOutputs.path("endings");
 
-        JsonNode detailsOutput = aiClient.generate(
-                SYSTEM_PROMPT_NODE_DETAILS,
-                baseContext + "\n\nnodes:\n" + nodesContext + "\n\nfacts:\n" + compactJson(factsStage.getCurrentRevision().outputJson().path("facts"))
-        );
+        if ("node_list".equals(step)) {
+            nodeListOutput = aiClient.generate(SYSTEM_PROMPT_NODE_LIST, baseContext);
+            stepOutputs.set("node_list", nodeListOutput);
+        } else if ("node_details".equals(step)) {
+            ensureNodesPresent(nodeListOutput);
+            String nodesContext = compactJson(nodeListOutput.path("nodes"));
+            detailsOutput = aiClient.generate(
+                    SYSTEM_PROMPT_NODE_DETAILS,
+                    baseContext + "\n\nnodes:\n" + nodesContext + "\n\nfacts:\n" + compactJson(factsStage.getCurrentRevision().outputJson().path("facts"))
+            );
+            stepOutputs.set("node_details", detailsOutput);
+        } else if ("edges".equals(step)) {
+            ensureNodesPresent(nodeListOutput);
+            String nodesContext = compactJson(nodeListOutput.path("nodes"));
+            edgesOutput = aiClient.generate(
+                    SYSTEM_PROMPT_EDGES,
+                    baseContext + "\n\nnodes:\n" + nodesContext
+            );
+            stepOutputs.set("edges", edgesOutput);
+        } else if ("endings".equals(step)) {
+            ensureNodesPresent(nodeListOutput);
+            String nodesContext = compactJson(nodeListOutput.path("nodes"));
+            endingsOutput = aiClient.generate(
+                    SYSTEM_PROMPT_ENDINGS,
+                    baseContext + "\n\nnodes:\n" + nodesContext
+            );
+            stepOutputs.set("endings", endingsOutput);
+        } else {
+            throw new ConflictException("Unsupported QUEST_GRAPH step: " + step);
+        }
 
-        JsonNode edgesOutput = aiClient.generate(
-                SYSTEM_PROMPT_EDGES,
-                baseContext + "\n\nnodes:\n" + nodesContext
-        );
-
-        JsonNode endingsOutput = aiClient.generate(
-                SYSTEM_PROMPT_ENDINGS,
-                baseContext + "\n\nnodes:\n" + nodesContext
-        );
-
-        return assembleGraph(nodeListOutput, detailsOutput, edgesOutput, endingsOutput);
+        return assembleGraph(nodeListOutput, detailsOutput, edgesOutput, endingsOutput, stepOutputs);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -196,7 +227,8 @@ public class FlowStageRunner implements StageRunner {
             JsonNode nodeListOutput,
             JsonNode detailsOutput,
             JsonNode edgesOutput,
-            JsonNode endingsOutput
+            JsonNode endingsOutput,
+            ObjectNode stepOutputs
     ) {
         Map<String, JsonNode> detailsById = mapById(detailsOutput.path("node_details"));
         Map<String, JsonNode> edgesById = mapById(edgesOutput.path("edges"));
@@ -228,15 +260,22 @@ public class FlowStageRunner implements StageRunner {
         ObjectNode result = objectMapper.createObjectNode();
         result.set("nodes", nodesResult);
         result.set("endings", copyArray(endingsOutput.path("endings")));
-
-        ObjectNode stepOutputs = objectMapper.createObjectNode();
-        stepOutputs.set("node_list", nodeListOutput);
-        stepOutputs.set("node_details", detailsOutput);
-        stepOutputs.set("edges", edgesOutput);
-        stepOutputs.set("endings", endingsOutput);
         result.set("step_outputs", stepOutputs);
 
         return result;
+    }
+
+    private ObjectNode currentStepOutputs(JsonNode currentOutput) {
+        if (currentOutput != null && currentOutput.path("step_outputs").isObject()) {
+            return (ObjectNode) currentOutput.path("step_outputs").deepCopy();
+        }
+        return objectMapper.createObjectNode();
+    }
+
+    private void ensureNodesPresent(JsonNode nodeListOutput) {
+        if (!nodeListOutput.path("nodes").isArray() || nodeListOutput.path("nodes").isEmpty()) {
+            throw new ConflictException("QUEST_GRAPH step requires generated node_list first");
+        }
     }
 
     private Map<String, JsonNode> mapById(JsonNode arrayNode) {
@@ -271,4 +310,3 @@ public class FlowStageRunner implements StageRunner {
         return raw.substring(0, MAX_CONTEXT_CHARS) + "...";
     }
 }
-

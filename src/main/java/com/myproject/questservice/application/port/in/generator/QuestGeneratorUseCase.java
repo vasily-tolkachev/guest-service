@@ -15,6 +15,7 @@ public interface QuestGeneratorUseCase {
     List<QuestProjectView> listProjects();
 
     QuestProjectView generateStage(UUID projectId, StageType stageType);
+    QuestProjectView generateStageStep(UUID projectId, StageType stageType, String step);
 
     QuestProjectView approveStage(UUID projectId, StageType stageType);
 

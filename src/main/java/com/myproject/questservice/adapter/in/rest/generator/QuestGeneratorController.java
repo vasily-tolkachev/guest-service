@@ -46,6 +46,11 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.generateStage(id, type);
     }
 
+    @PostMapping("/{id}/stages/{type}/steps/{step}/generate")
+    public QuestProjectView generateStageStep(@PathVariable UUID id, @PathVariable StageType type, @PathVariable String step) {
+        return questGeneratorUseCase.generateStageStep(id, type, step);
+    }
+
     @PostMapping("/{id}/stages/{type}/approve")
     public QuestProjectView approveStage(@PathVariable UUID id, @PathVariable StageType type) {
         return questGeneratorUseCase.approveStage(id, type);
