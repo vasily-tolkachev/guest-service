@@ -132,12 +132,11 @@ public class WriterStageRunner implements StageRunner {
                 """.formatted(
                 project.getName(),
                 style,
-                mysteryJson.toPrettyString(),
-                worldJson.toPrettyString(),
-                npcJson.toPrettyString(),
-                factsJson.toPrettyString(),
-                flowJson.toPrettyString()
+                mysteryJson.toString(),
+                worldJson.toString(),
+                npcJson.toString(),
+                factsJson.toString(),
+                flowJson.toString()
         );
     }
 }
-

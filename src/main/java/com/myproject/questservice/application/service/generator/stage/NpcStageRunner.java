@@ -101,7 +101,6 @@ public class NpcStageRunner implements StageRunner {
                 - avoid exact dialogue, scene plans, and quest steps
                 - keep outputs useful for next FACTS/FLOW stages
                 - all text in Russian
-                """.formatted(project.getName(), style, mysteryJson.toPrettyString(), worldJson.toPrettyString());
+                """.formatted(project.getName(), style, mysteryJson.toString(), worldJson.toString());
     }
 }
-

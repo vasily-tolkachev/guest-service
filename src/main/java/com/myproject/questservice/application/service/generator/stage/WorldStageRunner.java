@@ -86,7 +86,6 @@ public class WorldStageRunner implements StageRunner {
                 - do not invent exact locations, named characters, or quest steps
                 - keep it actionable for next stages
                 - all text in Russian
-                """.formatted(project.getName(), style, approvedMysteryJson.toPrettyString());
+                """.formatted(project.getName(), style, approvedMysteryJson.toString());
     }
 }
-

@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClientResponseException;
 @RequiredArgsConstructor
 public class OpenAiAiClient implements AiClient {
     private static final int DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
-    private static final int DEFAULT_READ_TIMEOUT_MS = 60_000;
+    private static final int DEFAULT_READ_TIMEOUT_MS = 180_000;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final OpenAiProperties properties;
@@ -116,4 +116,3 @@ public class OpenAiAiClient implements AiClient {
     ) {
     }
 }
-

@@ -116,10 +116,9 @@ public class FactsStageRunner implements StageRunner {
                 """.formatted(
                 project.getName(),
                 style,
-                mysteryJson.toPrettyString(),
-                worldJson.toPrettyString(),
-                npcJson.toPrettyString()
+                mysteryJson.toString(),
+                worldJson.toString(),
+                npcJson.toString()
         );
     }
 }
-

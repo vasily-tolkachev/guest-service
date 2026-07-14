@@ -127,11 +127,10 @@ public class FlowStageRunner implements StageRunner {
                 """.formatted(
                 project.getName(),
                 style,
-                mysteryJson.toPrettyString(),
-                worldJson.toPrettyString(),
-                npcJson.toPrettyString(),
-                factsJson.toPrettyString()
+                mysteryJson.toString(),
+                worldJson.toString(),
+                npcJson.toString(),
+                factsJson.toString()
         );
     }
 }
-
