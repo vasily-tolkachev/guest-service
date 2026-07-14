@@ -72,12 +72,20 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
             throw new ConflictException("Stage is not ready for generation: " + stageType);
         }
+        StageStatus previousStatus = stage.getStatus();
 
         StageRunner runner = stageRunnerRegistry.find(stageType)
                 .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
 
         stage.setStatus(StageStatus.GENERATING);
-        JsonNode output = runner.generate(projectId);
+        JsonNode output;
+        try {
+            output = runner.generate(projectId);
+        } catch (RuntimeException ex) {
+            stage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
 
         int nextRevisionNumber = stage.getCurrentRevision() == null
                 ? 1
