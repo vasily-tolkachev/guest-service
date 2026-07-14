@@ -1,6 +1,7 @@
 package com.myproject.questservice.application.service.generator;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestStageView;
 import com.myproject.questservice.adapter.in.rest.dto.generator.StageRevisionView;
@@ -27,10 +28,16 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     private final ProjectRepository projectRepository;
     private final StageRunnerRegistry stageRunnerRegistry;
+    private final ObjectMapper objectMapper;
 
-    public QuestGeneratorApplicationService(ProjectRepository projectRepository, StageRunnerRegistry stageRunnerRegistry) {
+    public QuestGeneratorApplicationService(
+            ProjectRepository projectRepository,
+            StageRunnerRegistry stageRunnerRegistry,
+            ObjectMapper objectMapper
+    ) {
         this.projectRepository = projectRepository;
         this.stageRunnerRegistry = stageRunnerRegistry;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -141,9 +148,10 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (revision == null) {
             return null;
         }
+        Object outputJson = objectMapper.convertValue(revision.outputJson(), Object.class);
         return new StageRevisionView(
                 revision.revisionNumber(),
-                revision.outputJson(),
+                outputJson,
                 revision.createdAt()
         );
     }
