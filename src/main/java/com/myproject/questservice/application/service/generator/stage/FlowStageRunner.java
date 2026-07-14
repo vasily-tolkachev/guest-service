@@ -1,6 +1,9 @@
 package com.myproject.questservice.application.service.generator.stage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.NotFoundException;
@@ -12,47 +15,93 @@ import com.myproject.questservice.domain.generator.StageType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class FlowStageRunner implements StageRunner {
-    private static final String SYSTEM_PROMPT = """
-            You are a Quest Graph Design Generator for a quest generation pipeline.
+    private static final int MAX_CONTEXT_CHARS = 7_000;
 
-            Your task is to create ONLY the QUEST_GRAPH stage artifact.
-            Inputs are approved mystery, world, npc, and facts artifacts.
+    private static final String SYSTEM_PROMPT_NODE_LIST = """
+            Ты генератор списка узлов для стадии QUEST_GRAPH.
+            Верни только валидный JSON.
+            Все строковые поля должны быть на русском языке.
 
-            You are NOT writing prose scenes or dialogues.
-            You are designing graph structure directly convertible to quest DSL.
-
-            IMPORTANT:
-            - Output MUST be valid JSON only.
-            - All JSON string values MUST be in Russian.
-
-            Return JSON with this schema:
+            Верни схему:
             {
               "nodes": [
                 {
-                  "id": "",
-                  "purpose": "",
-                  "required_facts": [""],
-                  "revealed_facts": [""],
-                  "participants": [""],
+                  "id": "N1",
+                  "purpose": ""
+                }
+              ]
+            }
+            Сгенерируй 8-16 узлов, с уникальными id N1..N16.
+            """;
+
+    private static final String SYSTEM_PROMPT_NODE_DETAILS = """
+            Ты генератор деталей узлов для стадии QUEST_GRAPH.
+            Верни только валидный JSON.
+            Все строковые поля должны быть на русском языке.
+
+            Для каждого узла добавь:
+            - required_facts
+            - revealed_facts
+            - participants
+
+            Верни схему:
+            {
+              "node_details": [
+                {
+                  "id": "N1",
+                  "required_facts": ["F1"],
+                  "revealed_facts": ["F2"],
+                  "participants": ["роль"]
+                }
+              ]
+            }
+            """;
+
+    private static final String SYSTEM_PROMPT_EDGES = """
+            Ты генератор переходов графа для стадии QUEST_GRAPH.
+            Верни только валидный JSON.
+            Все строковые поля должны быть на русском языке.
+
+            Для каждого узла создай 1-3 выбора:
+            - text
+            - next
+
+            Верни схему:
+            {
+              "edges": [
+                {
+                  "id": "N1",
                   "choices": [
-                    {
-                      "text": "",
-                      "next": ""
-                    }
+                    { "text": "", "next": "N2" }
                   ]
                 }
-              ],
+              ]
+            }
+            Граф должен быть связным и вести к финальным узлам.
+            """;
+
+    private static final String SYSTEM_PROMPT_ENDINGS = """
+            Ты генератор финалов для стадии QUEST_GRAPH.
+            Верни только валидный JSON.
+            Все строковые поля должны быть на русском языке.
+
+            Верни схему:
+            {
               "endings": [""]
             }
+            Сгенерируй 2-4 варианта финала.
             """;
 
     private final ProjectRepository projectRepository;
     private final AiClient aiClient;
+    private final ObjectMapper objectMapper;
 
     @Override
     public StageType type() {
@@ -69,14 +118,33 @@ public class FlowStageRunner implements StageRunner {
         QuestStage npcStage = requiredApprovedStage(project, StageType.NPC);
         QuestStage factsStage = requiredApprovedStage(project, StageType.FACTS);
 
-        String userPrompt = buildUserPrompt(
+        String baseContext = buildBaseContext(
                 project,
                 mysteryStage.getCurrentRevision().outputJson(),
                 worldStage.getCurrentRevision().outputJson(),
                 npcStage.getCurrentRevision().outputJson(),
                 factsStage.getCurrentRevision().outputJson()
         );
-        return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+
+        JsonNode nodeListOutput = aiClient.generate(SYSTEM_PROMPT_NODE_LIST, baseContext);
+        String nodesContext = compactJson(nodeListOutput.path("nodes"));
+
+        JsonNode detailsOutput = aiClient.generate(
+                SYSTEM_PROMPT_NODE_DETAILS,
+                baseContext + "\n\nnodes:\n" + nodesContext + "\n\nfacts:\n" + compactJson(factsStage.getCurrentRevision().outputJson().path("facts"))
+        );
+
+        JsonNode edgesOutput = aiClient.generate(
+                SYSTEM_PROMPT_EDGES,
+                baseContext + "\n\nnodes:\n" + nodesContext
+        );
+
+        JsonNode endingsOutput = aiClient.generate(
+                SYSTEM_PROMPT_ENDINGS,
+                baseContext + "\n\nnodes:\n" + nodesContext
+        );
+
+        return assembleGraph(nodeListOutput, detailsOutput, edgesOutput, endingsOutput);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -88,7 +156,7 @@ public class FlowStageRunner implements StageRunner {
         return stage;
     }
 
-    private String buildUserPrompt(
+    private String buildBaseContext(
             QuestProject project,
             JsonNode mysteryJson,
             JsonNode worldJson,
@@ -99,8 +167,7 @@ public class FlowStageRunner implements StageRunner {
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build QUEST_GRAPH stage artifact from approved mystery, world, npc, and facts data.
-
+                Контекст проекта:
                 project_name: %s
                 quest_style: %s
 
@@ -115,20 +182,93 @@ public class FlowStageRunner implements StageRunner {
 
                 approved_facts_json:
                 %s
-
-                Requirements:
-                - output node-and-edge quest graph
-                - each node should have clear purpose and choice links
-                - avoid prose atmosphere blocks and dialogue scripts
-                - keep output directly mappable to quest DSL
-                - all text in Russian
                 """.formatted(
                 project.getName(),
                 style,
-                mysteryJson.toString(),
-                worldJson.toString(),
-                npcJson.toString(),
-                factsJson.toString()
+                compactJson(mysteryJson),
+                compactJson(worldJson),
+                compactJson(npcJson),
+                compactJson(factsJson)
         );
     }
+
+    private JsonNode assembleGraph(
+            JsonNode nodeListOutput,
+            JsonNode detailsOutput,
+            JsonNode edgesOutput,
+            JsonNode endingsOutput
+    ) {
+        Map<String, JsonNode> detailsById = mapById(detailsOutput.path("node_details"));
+        Map<String, JsonNode> edgesById = mapById(edgesOutput.path("edges"));
+
+        ArrayNode nodesResult = objectMapper.createArrayNode();
+        JsonNode nodes = nodeListOutput.path("nodes");
+        if (nodes.isArray()) {
+            for (JsonNode node : nodes) {
+                String id = node.path("id").asText("");
+                if (id.isBlank()) {
+                    continue;
+                }
+                ObjectNode merged = objectMapper.createObjectNode();
+                merged.put("id", id);
+                merged.put("purpose", node.path("purpose").asText(""));
+
+                JsonNode details = detailsById.get(id);
+                merged.set("required_facts", copyArray(details == null ? null : details.path("required_facts")));
+                merged.set("revealed_facts", copyArray(details == null ? null : details.path("revealed_facts")));
+                merged.set("participants", copyArray(details == null ? null : details.path("participants")));
+
+                JsonNode edge = edgesById.get(id);
+                merged.set("choices", copyArray(edge == null ? null : edge.path("choices")));
+
+                nodesResult.add(merged);
+            }
+        }
+
+        ObjectNode result = objectMapper.createObjectNode();
+        result.set("nodes", nodesResult);
+        result.set("endings", copyArray(endingsOutput.path("endings")));
+
+        ObjectNode stepOutputs = objectMapper.createObjectNode();
+        stepOutputs.set("node_list", nodeListOutput);
+        stepOutputs.set("node_details", detailsOutput);
+        stepOutputs.set("edges", edgesOutput);
+        stepOutputs.set("endings", endingsOutput);
+        result.set("step_outputs", stepOutputs);
+
+        return result;
+    }
+
+    private Map<String, JsonNode> mapById(JsonNode arrayNode) {
+        Map<String, JsonNode> map = new HashMap<>();
+        if (!arrayNode.isArray()) {
+            return map;
+        }
+        for (JsonNode node : arrayNode) {
+            String id = node.path("id").asText("");
+            if (!id.isBlank()) {
+                map.put(id, node);
+            }
+        }
+        return map;
+    }
+
+    private ArrayNode copyArray(JsonNode node) {
+        ArrayNode copy = objectMapper.createArrayNode();
+        if (node != null && node.isArray()) {
+            for (JsonNode item : node) {
+                copy.add(item);
+            }
+        }
+        return copy;
+    }
+
+    private String compactJson(JsonNode json) {
+        String raw = json == null ? "{}" : json.toString();
+        if (raw.length() <= MAX_CONTEXT_CHARS) {
+            return raw;
+        }
+        return raw.substring(0, MAX_CONTEXT_CHARS) + "...";
+    }
 }
+
