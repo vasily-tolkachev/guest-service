@@ -3,6 +3,7 @@ package com.myproject.questservice.adapter.in.rest;
 import com.myproject.questservice.adapter.in.rest.dto.ApiErrorResponse;
 import com.myproject.questservice.adapter.out.dsl.error.DslProcessingException;
 import com.myproject.questservice.application.service.BadRequestException;
+import com.myproject.questservice.application.service.AiGenerationException;
 import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.FileReadException;
 import com.myproject.questservice.application.service.NotFoundException;
@@ -39,6 +40,12 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleNotImplemented(NotImplementedException ex) {
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                 .body(new ApiErrorResponse("NOT_IMPLEMENTED", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(AiGenerationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAiGeneration(AiGenerationException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ApiErrorResponse("AI_GENERATION_ERROR", ex.getMessage(), null, null));
     }
 
     @ExceptionHandler(QuestChangedException.class)

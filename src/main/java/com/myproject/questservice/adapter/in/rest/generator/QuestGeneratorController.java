@@ -27,7 +27,7 @@ public class QuestGeneratorController {
 
     @PostMapping
     public QuestProjectView createProject(@Valid @RequestBody CreateProjectRequest request) {
-        return questGeneratorUseCase.createProject(request.name());
+        return questGeneratorUseCase.createProject(request.name(), request.questStyle());
     }
 
     @GetMapping
@@ -50,4 +50,3 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveStage(id, type);
     }
 }
-

@@ -13,17 +13,19 @@ import java.util.UUID;
 public class QuestProject {
     private UUID id;
     private String name;
+    private String questStyle;
     private QuestProjectStatus status;
     private List<QuestStage> stages;
 
-    public QuestProject(UUID id, String name, QuestProjectStatus status, List<QuestStage> stages) {
+    public QuestProject(UUID id, String name, String questStyle, QuestProjectStatus status, List<QuestStage> stages) {
         this.id = id;
         this.name = name;
+        this.questStyle = questStyle;
         this.status = status;
         this.stages = stages;
     }
 
-    public static QuestProject create(String name) {
+    public static QuestProject create(String name, String questStyle) {
         List<QuestStage> stages = new ArrayList<>();
         StageType[] orderedTypes = StageType.values();
         for (int i = 0; i < orderedTypes.length; i++) {
@@ -31,7 +33,7 @@ public class QuestProject {
             StageStatus status = i == 0 ? StageStatus.READY : StageStatus.NOT_STARTED;
             stages.add(new QuestStage(type, status, false, null));
         }
-        return new QuestProject(UUID.randomUUID(), name, QuestProjectStatus.ACTIVE, stages);
+        return new QuestProject(UUID.randomUUID(), name, questStyle, QuestProjectStatus.ACTIVE, stages);
     }
 
     public Optional<QuestStage> findStage(StageType type) {
@@ -55,4 +57,3 @@ public class QuestProject {
         return -1;
     }
 }
-

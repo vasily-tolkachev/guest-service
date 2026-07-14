@@ -34,12 +34,15 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView createProject(String name) {
+    public QuestProjectView createProject(String name, String questStyle) {
         String normalizedName = name == null ? "" : name.trim();
         if (normalizedName.isBlank()) {
             throw new BadRequestException("Project name is required");
         }
-        QuestProject created = projectRepository.save(QuestProject.create(normalizedName));
+        String normalizedQuestStyle = questStyle == null || questStyle.trim().isBlank()
+                ? "classic-adventure"
+                : questStyle.trim();
+        QuestProject created = projectRepository.save(QuestProject.create(normalizedName, normalizedQuestStyle));
         return toView(created);
     }
 
@@ -128,6 +131,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return new QuestProjectView(
                 project.getId().toString(),
                 project.getName(),
+                project.getQuestStyle(),
                 project.getStatus().name(),
                 stages
         );
@@ -144,4 +148,3 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         );
     }
 }
-

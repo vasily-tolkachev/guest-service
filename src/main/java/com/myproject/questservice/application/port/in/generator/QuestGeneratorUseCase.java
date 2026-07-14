@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public interface QuestGeneratorUseCase {
 
-    QuestProjectView createProject(String name);
+    QuestProjectView createProject(String name, String questStyle);
 
     QuestProjectView getProject(UUID id);
 
@@ -18,4 +18,3 @@ public interface QuestGeneratorUseCase {
 
     QuestProjectView approveStage(UUID projectId, StageType stageType);
 }
-
