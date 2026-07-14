@@ -29,15 +29,18 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private final ProjectRepository projectRepository;
     private final StageRunnerRegistry stageRunnerRegistry;
     private final ObjectMapper objectMapper;
+    private final FlowDslExportService flowDslExportService;
 
     public QuestGeneratorApplicationService(
             ProjectRepository projectRepository,
             StageRunnerRegistry stageRunnerRegistry,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            FlowDslExportService flowDslExportService
     ) {
         this.projectRepository = projectRepository;
         this.stageRunnerRegistry = stageRunnerRegistry;
         this.objectMapper = objectMapper;
+        this.flowDslExportService = flowDslExportService;
     }
 
     @Override
@@ -113,14 +116,26 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         stage.setApproved(true);
         stage.setStatus(StageStatus.APPROVED);
 
-        project.nextStage(stageType).ifPresent(nextStage -> {
-            if (nextStage.getStatus() == StageStatus.NOT_STARTED) {
-                nextStage.setStatus(StageStatus.READY);
-            }
-        });
+        if (stageType != StageType.QUEST_GRAPH) {
+            project.nextStage(stageType).ifPresent(nextStage -> {
+                if (nextStage.getStatus() == StageStatus.NOT_STARTED) {
+                    nextStage.setStatus(StageStatus.READY);
+                }
+            });
+        }
 
         projectRepository.save(project);
         return toView(project);
+    }
+
+    @Override
+    public String exportDsl(UUID projectId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage graphStage = getRequiredStage(project, StageType.QUEST_GRAPH);
+        if (graphStage.getStatus() != StageStatus.APPROVED || graphStage.getCurrentRevision() == null) {
+            throw new ConflictException("DSL export requires APPROVED QUEST_GRAPH stage");
+        }
+        return flowDslExportService.toDsl(project.getName(), graphStage.getCurrentRevision().outputJson());
     }
 
     private QuestProject getRequiredProject(UUID id) {

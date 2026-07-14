@@ -17,4 +17,6 @@ public interface QuestGeneratorUseCase {
     QuestProjectView generateStage(UUID projectId, StageType stageType);
 
     QuestProjectView approveStage(UUID projectId, StageType stageType);
+
+    String exportDsl(UUID projectId);
 }

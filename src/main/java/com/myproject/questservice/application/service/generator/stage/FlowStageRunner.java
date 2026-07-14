@@ -18,13 +18,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FlowStageRunner implements StageRunner {
     private static final String SYSTEM_PROMPT = """
-            You are a Flow Design Generator for a quest generation pipeline.
+            You are a Quest Graph Design Generator for a quest generation pipeline.
 
-            Your task is to create ONLY the FLOW stage artifact.
+            Your task is to create ONLY the QUEST_GRAPH stage artifact.
             Inputs are approved mystery, world, npc, and facts artifacts.
 
-            You are NOT writing full narrative text.
-            You are NOT producing final quest script.
+            You are NOT writing prose scenes or dialogues.
+            You are designing graph structure directly convertible to quest DSL.
 
             IMPORTANT:
             - Output MUST be valid JSON only.
@@ -32,24 +32,22 @@ public class FlowStageRunner implements StageRunner {
 
             Return JSON with this schema:
             {
-              "investigation_phases": [
+              "nodes": [
                 {
-                  "phase": "",
-                  "goal": "",
-                  "expected_shift_in_understanding": "",
-                  "required_fact_focus": [""],
-                  "risk_of_misinterpretation": ""
+                  "id": "",
+                  "purpose": "",
+                  "required_facts": [""],
+                  "revealed_facts": [""],
+                  "participants": [""],
+                  "choices": [
+                    {
+                      "text": "",
+                      "next": ""
+                    }
+                  ]
                 }
               ],
-              "decision_gates": [
-                {
-                  "gate": "",
-                  "player_choice_axis": "",
-                  "consequence_direction": ""
-                }
-              ],
-              "branching_pressure_points": [""],
-              "final_reveal_delivery_model": ""
+              "endings": [""]
             }
             """;
 
@@ -58,7 +56,7 @@ public class FlowStageRunner implements StageRunner {
 
     @Override
     public StageType type() {
-        return StageType.FLOW;
+        return StageType.QUEST_GRAPH;
     }
 
     @Override
@@ -85,7 +83,7 @@ public class FlowStageRunner implements StageRunner {
         QuestStage stage = project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
         if (stage.getStatus() != StageStatus.APPROVED || stage.getCurrentRevision() == null) {
-            throw new ConflictException("FLOW generation requires APPROVED " + type + " stage");
+            throw new ConflictException("QUEST_GRAPH generation requires APPROVED " + type + " stage");
         }
         return stage;
     }
@@ -101,7 +99,7 @@ public class FlowStageRunner implements StageRunner {
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build FLOW stage artifact from approved mystery, world, npc, and facts data.
+                Build QUEST_GRAPH stage artifact from approved mystery, world, npc, and facts data.
 
                 project_name: %s
                 quest_style: %s
@@ -119,10 +117,10 @@ public class FlowStageRunner implements StageRunner {
                 %s
 
                 Requirements:
-                - define progression of understanding, not prose scenes
-                - keep branch logic high-level and implementation-ready
-                - avoid exact dialogue lines and location-level choreography
-                - keep output actionable for WRITER stage
+                - output node-and-edge quest graph
+                - each node should have clear purpose and choice links
+                - avoid prose atmosphere blocks and dialogue scripts
+                - keep output directly mappable to quest DSL
                 - all text in Russian
                 """.formatted(
                 project.getName(),

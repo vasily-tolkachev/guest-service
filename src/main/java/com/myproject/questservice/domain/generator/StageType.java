@@ -5,7 +5,5 @@ public enum StageType {
     WORLD,
     NPC,
     FACTS,
-    FLOW,
-    WRITER
+    QUEST_GRAPH
 }
-

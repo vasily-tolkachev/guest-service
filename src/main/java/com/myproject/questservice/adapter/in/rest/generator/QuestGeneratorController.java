@@ -5,6 +5,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
 import com.myproject.questservice.domain.generator.StageType;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,5 +49,10 @@ public class QuestGeneratorController {
     @PostMapping("/{id}/stages/{type}/approve")
     public QuestProjectView approveStage(@PathVariable UUID id, @PathVariable StageType type) {
         return questGeneratorUseCase.approveStage(id, type);
+    }
+
+    @PostMapping(value = "/{id}/export-dsl", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String exportDsl(@PathVariable UUID id) {
+        return questGeneratorUseCase.exportDsl(id);
     }
 }
