@@ -34,6 +34,7 @@ public class MysteryStageRunner implements StageRunner {
             IMPORTANT:
             The output MUST be written in Russian.
             All JSON values must contain Russian text.
+            No stage is allowed to rewrite or retell data from previous stages.
 
             ---
 

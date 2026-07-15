@@ -28,6 +28,7 @@ public class QuestOutlineStageRunner implements StageRunner {
             - All JSON string values MUST be in Russian.
             - Do NOT generate scenes, dialogues, transitions, or graph edges.
             - Chapters must reference fact ids from FACTS stage.
+            - No stage is allowed to rewrite or retell data from previous stages.
 
             Return JSON with this schema:
             {

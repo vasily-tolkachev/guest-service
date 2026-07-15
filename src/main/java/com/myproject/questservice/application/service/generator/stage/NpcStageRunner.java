@@ -29,6 +29,7 @@ public class NpcStageRunner implements StageRunner {
             IMPORTANT:
             - Output MUST be valid JSON only.
             - All JSON string values MUST be in Russian.
+            - No stage is allowed to rewrite or retell data from previous stages.
 
             Return JSON with this schema:
             {

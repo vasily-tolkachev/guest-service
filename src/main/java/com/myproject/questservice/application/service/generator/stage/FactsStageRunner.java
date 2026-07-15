@@ -28,6 +28,7 @@ public class FactsStageRunner implements StageRunner {
             - All JSON string values MUST be in Russian.
             - Facts must be canonical statements only.
             - Do NOT include owner, unlocks, mandatory, visibility, graph, or any extra metadata.
+            - No stage is allowed to rewrite or retell data from previous stages.
 
             Return JSON with this schema:
             {

@@ -29,18 +29,26 @@ public class WorldStageRunner implements StageRunner {
             IMPORTANT:
             - Output MUST be valid JSON only.
             - All JSON string values MUST be in Russian.
+            - No stage is allowed to rewrite or retell data from previous stages.
 
-            Keep output abstract enough for later NPC/FACTS/FLOW stages.
+            Keep output concrete and structured for later NPC/FACTS stages.
 
             Return JSON with this schema:
             {
-              "world_premise": "",
-              "environmental_rules": [""],
-              "factions_or_forces": [""],
-              "public_beliefs": [""],
-              "hidden_pressures": [""],
-              "world_tensions": [""],
-              "world_recontextualization_axis": ""
+              "locations": [
+                {
+                  "id": "L01",
+                  "name": "",
+                  "purpose": ""
+                }
+              ],
+              "organizations": [
+                {
+                  "id": "O01",
+                  "name": ""
+                }
+              ],
+              "rules": [""]
             }
             """;
 
@@ -82,9 +90,10 @@ public class WorldStageRunner implements StageRunner {
                 %s
 
                 Requirements:
-                - derive world assumptions from mystery ambiguity and reinterpretation arc
-                - do not invent exact locations, named characters, or quest steps
-                - keep it actionable for next stages
+                - generate 3-8 locations with unique ids L01, L02, ...
+                - generate 1-5 organizations with unique ids O01, O02, ...
+                - generate 3-10 world rules as short statements
+                - do not generate scenes, dialogues, or quest steps
                 - all text in Russian
                 """.formatted(project.getName(), style, approvedMysteryJson.toString());
     }
