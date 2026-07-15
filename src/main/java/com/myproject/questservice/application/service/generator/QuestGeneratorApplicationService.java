@@ -24,8 +24,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -254,35 +256,58 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView importProjectJson(UUID projectId, JsonNode snapshotJson) {
-        if (snapshotJson == null || snapshotJson.isNull()) {
+    public QuestProjectView importProjectJson(UUID projectId, Object snapshotJson) {
+        if (snapshotJson == null) {
+            throw new BadRequestException("snapshotJson is required");
+        }
+        JsonNode snapshotNode = objectMapper.valueToTree(snapshotJson);
+        if (snapshotNode == null || snapshotNode.isNull()) {
             throw new BadRequestException("snapshotJson is required");
         }
 
         QuestProject project = getRequiredProject(projectId);
-        JsonNode stagesNode = snapshotJson.path("stages");
+        JsonNode stagesNode = snapshotNode.path("stages");
         if (!stagesNode.isArray() || stagesNode.isEmpty()) {
             throw new BadRequestException("snapshotJson.stages must be a non-empty array");
         }
 
-        List<QuestStage> importedStages = new ArrayList<>();
+        Map<StageType, JsonNode> importedJsonByType = new EnumMap<>(StageType.class);
         for (JsonNode stageNode : stagesNode) {
             StageType type = parseStageType(stageNode.path("type").asText(""));
+            if (type != StageType.MYSTERY && type != StageType.WORLD && type != StageType.NPC && type != StageType.FACTS) {
+                continue;
+            }
             JsonNode outputJson = stageNode.path("outputJson");
             if (outputJson.isMissingNode() || outputJson.isNull()) {
                 outputJson = objectMapper.createObjectNode();
             }
-
-            StageRevision revision = new StageRevision(
-                    1,
-                    outputJson,
-                    Instant.now()
-            );
-            // REVIEW keeps generation and approval actions available in UI flows.
-            importedStages.add(new QuestStage(type, StageStatus.REVIEW, false, revision));
+            importedJsonByType.put(type, outputJson);
         }
 
-        project.setStages(importedStages);
+        if (!importedJsonByType.containsKey(StageType.MYSTERY)
+                || !importedJsonByType.containsKey(StageType.WORLD)
+                || !importedJsonByType.containsKey(StageType.NPC)
+                || !importedJsonByType.containsKey(StageType.FACTS)) {
+            throw new BadRequestException("Import must include MYSTERY, WORLD, NPC, FACTS stages");
+        }
+
+        for (QuestStage stage : project.getStages()) {
+            JsonNode importedOutput = importedJsonByType.get(stage.getType());
+            if (importedOutput != null) {
+                stage.setCurrentRevision(new StageRevision(1, importedOutput, Instant.now()));
+                stage.setApproved(true);
+                stage.setStatus(StageStatus.APPROVED);
+                continue;
+            }
+            stage.setApproved(false);
+            stage.setCurrentRevision(null);
+            if (stage.getType() == StageType.QUEST_OUTLINE) {
+                stage.setStatus(StageStatus.READY);
+            } else {
+                stage.setStatus(StageStatus.NOT_STARTED);
+            }
+        }
+
         projectRepository.save(project);
         return toView(project);
     }

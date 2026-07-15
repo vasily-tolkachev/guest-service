@@ -26,7 +26,7 @@ public interface QuestGeneratorUseCase {
 
     Object exportProjectJson(UUID projectId);
 
-    QuestProjectView importProjectJson(UUID projectId, JsonNode snapshotJson);
+    QuestProjectView importProjectJson(UUID projectId, Object snapshotJson);
 
     String exportDsl(UUID projectId);
 
