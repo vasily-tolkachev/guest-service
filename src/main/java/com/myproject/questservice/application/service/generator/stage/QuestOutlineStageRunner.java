@@ -37,6 +37,8 @@ public class QuestOutlineStageRunner implements StageRunner {
                   "id": "CH01",
                   "title": "",
                   "purpose": "",
+                  "locations": ["L01", "L02"],
+                  "participants": ["NPC01", "NPC02"],
                   "facts": ["F01", "F02"]
                 }
               ]
@@ -110,7 +112,9 @@ public class QuestOutlineStageRunner implements StageRunner {
 
                 Requirements:
                 - produce 3-8 investigation chapters
-                - each chapter includes only id, title, purpose, facts
+                - each chapter includes only id, title, purpose, locations, participants, facts
+                - locations must reference WORLD location ids (L01, L02, ...)
+                - participants must reference NPC ids (NPC01, NPC02, ...)
                 - use fact ids from approved_facts_json
                 - no scenes, no branching, no graph
                 - all text in Russian

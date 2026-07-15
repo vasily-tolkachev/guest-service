@@ -33,18 +33,15 @@ public class NpcStageRunner implements StageRunner {
 
             Return JSON with this schema:
             {
-              "npc_roles": [
+              "npcs": [
                 {
+                  "id": "NPC01",
+                  "name": "",
                   "role": "",
-                  "public_position": "",
-                  "hidden_motivation": "",
-                  "knowledge_scope": "",
-                  "potential_bias": ""
+                  "organization": "O01",
+                  "motivation": ""
                 }
-              ],
-              "relationship_tensions": [""],
-              "information_gatekeepers": [""],
-              "npc_recontextualization_axis": ""
+              ]
             }
             """;
 
@@ -98,9 +95,10 @@ public class NpcStageRunner implements StageRunner {
                 %s
 
                 Requirements:
-                - define role archetypes, not named characters
-                - avoid exact dialogue, scene plans, and quest steps
-                - keep outputs useful for next FACTS/FLOW stages
+                - generate 4-12 NPC entries
+                - ids must be unique and formatted as NPC01, NPC02, ...
+                - organization must reference organization ids from WORLD (O01, O02, ...)
+                - use concise names and roles, no dialogue and no scene planning
                 - all text in Russian
                 """.formatted(project.getName(), style, mysteryJson.toString(), worldJson.toString());
     }
