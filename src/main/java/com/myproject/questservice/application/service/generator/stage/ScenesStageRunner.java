@@ -39,6 +39,7 @@ public class ScenesStageRunner implements SceneStageRunner {
             {
               "sceneId": "SC01",
               "title": "",
+              "situation": "",
               "objective": "",
               "location": "L02",
               "participants": ["NPC01"],
@@ -64,7 +65,9 @@ public class ScenesStageRunner implements SceneStageRunner {
             - AI may split scene into steps, actions, transitions, and fact reveals.
             - AI must not create new facts, NPCs, locations, mystery/chapter/scene changes.
             - Scene-level fields (title/objective/location/participants) must stay at root.
+            - situation must describe what is happening now in this scene as a dramatic in-world episode.
             - Step is atomic and contains purpose/requiredFacts/revealedFacts/actions.
+            - Step purpose must describe current gameplay situation, not bureaucratic procedure.
             - Action contains only id, text, nextStep.
             - nextStep may be null for ending action.
             - Do not create artificial ending nodes like ST_END only for termination.
@@ -99,7 +102,7 @@ public class ScenesStageRunner implements SceneStageRunner {
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage npcStage = requiredApprovedStage(project, StageType.NPC);
         QuestStage factsStage = requiredApprovedStage(project, StageType.FACTS);
-        QuestStage chaptersStage = requiredApprovedStage(project, StageType.CHAPTERS);
+        QuestStage chaptersStage = requiredChaptersStage(project);
 
         JsonNode sceneNode = findScene(chaptersStage.getCurrentRevision().outputJson(), normalizedSceneId);
         if (sceneNode == null) {
@@ -144,6 +147,18 @@ public class ScenesStageRunner implements SceneStageRunner {
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
         if (stage.getStatus() != StageStatus.APPROVED || stage.getCurrentRevision() == null) {
             throw new ConflictException("SCENES generation requires APPROVED " + type + " stage");
+        }
+        return stage;
+    }
+
+    private QuestStage requiredChaptersStage(QuestProject project) {
+        QuestStage stage = project.findStage(StageType.CHAPTERS)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.CHAPTERS));
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("SCENES generation requires generated CHAPTERS data");
+        }
+        if (stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
+            throw new ConflictException("SCENES generation requires CHAPTERS in REVIEW or APPROVED status");
         }
         return stage;
     }
@@ -279,6 +294,7 @@ public class ScenesStageRunner implements SceneStageRunner {
         ObjectNode normalized = objectMapper.createObjectNode();
         normalized.put("sceneId", sceneId);
         normalized.put("title", firstNonBlank(generatedScene.path("title").asText(""), sourceScene.path("title").asText("")));
+        normalized.put("situation", firstNonBlank(generatedScene.path("situation").asText(""), sourceScene.path("situation").asText("")));
         normalized.put("objective", firstNonBlank(generatedScene.path("objective").asText(""), sourceScene.path("objective").asText("")));
         normalized.put("location", firstNonBlank(generatedScene.path("location").asText(""), sourceScene.path("location").asText("")));
         normalized.set("participants", generatedScene.path("participants").isArray() ? generatedScene.path("participants") : sourceScene.path("participants"));

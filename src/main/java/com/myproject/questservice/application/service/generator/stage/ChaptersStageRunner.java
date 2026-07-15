@@ -41,6 +41,7 @@ public class ChaptersStageRunner implements ChapterStageRunner {
                 {
                   "id": "SC01",
                   "title": "",
+                  "situation": "",
                   "objective": "",
                   "location": "L01",
                   "participants": ["NPC01", "NPC02"],
@@ -157,7 +158,10 @@ public class ChaptersStageRunner implements ChapterStageRunner {
                 Requirements:
                 - generate 3-6 scenes for this chapter
                 - scene ids must be SC01, SC02, ... inside this chapter output
-                - each scene must include: id, title, objective, location, participants, requiredFacts, revealedFacts, player_actions, obstacles
+                - each scene must include: id, title, situation, objective, location, participants, requiredFacts, revealedFacts, player_actions, obstacles
+                - scene title must be an in-world dramatic situation, not an operational task
+                - scene situation must describe what is happening now in the world and why it is tense
+                - forbidden style for title/situation: process workflow like "Проверка", "Запрос", "Формализация", "Анализ", "Первичный осмотр"
                 - location must reference chapter.locations only
                 - participants must reference chapter.participants only
                 - requiredFacts and revealedFacts must reference chapter.facts only
@@ -168,6 +172,7 @@ public class ChaptersStageRunner implements ChapterStageRunner {
                 {
                   "id": "SC01",
                   "title": "Осмотр энергомодуля",
+                  "situation": "После инцидента доступ к энергомодулю ограничен; инженер нервничает и пытается свернуть осмотр, пока оборудование продолжает сбоить.",
                   "objective": "Понять, является ли повреждение следствием аварии или вмешательства.",
                   "location": "L02",
                   "participants": ["NPC03", "NPC05"],
