@@ -38,6 +38,10 @@ public class ScenesStageRunner implements SceneStageRunner {
             Output schema:
             {
               "sceneId": "SC01",
+              "title": "",
+              "objective": "",
+              "location": "L02",
+              "participants": ["NPC01"],
               "entryStep": "ST01",
               "steps": [
                 {
@@ -48,21 +52,23 @@ public class ScenesStageRunner implements SceneStageRunner {
                   "actions": [
                     {
                       "id": "A01",
-                      "description": "",
+                      "text": "",
                       "nextStep": "ST02"
                     }
                   ]
                 }
               ]
             }
-            
+
             Rules:
             - AI may split scene into steps, actions, transitions, and fact reveals.
             - AI must not create new facts, NPCs, locations, mystery/chapter/scene changes.
-            - Action contains only id, description, nextStep.
+            - Scene-level fields (title/objective/location/participants) must stay at root.
+            - Step is atomic and contains purpose/requiredFacts/revealedFacts/actions.
+            - Action contains only id, text, nextStep.
+            - nextStep may be null for ending action.
+            - Do not create artificial ending nodes like ST_END only for termination.
             - No conditions, no hidden logic, no DSL.
-            
-            Output json fileds in russian
             """;
 
     private final ProjectRepository projectRepository;
@@ -130,7 +136,7 @@ public class ScenesStageRunner implements SceneStageRunner {
         );
 
         JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
-        return mergeSceneOutput(currentOutput, generated, normalizedSceneId);
+        return mergeSceneOutput(currentOutput, generated, normalizedSceneId, sceneNode);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -259,7 +265,7 @@ public class ScenesStageRunner implements SceneStageRunner {
         return ids;
     }
 
-    private JsonNode mergeSceneOutput(JsonNode currentOutput, JsonNode generatedScene, String sceneId) {
+    private JsonNode mergeSceneOutput(JsonNode currentOutput, JsonNode generatedScene, String sceneId, JsonNode sourceScene) {
         ObjectNode root = objectMapper.createObjectNode();
         ArrayNode scenes = objectMapper.createArrayNode();
         if (currentOutput != null && currentOutput.path("scenes").isArray()) {
@@ -272,10 +278,18 @@ public class ScenesStageRunner implements SceneStageRunner {
         }
         ObjectNode normalized = objectMapper.createObjectNode();
         normalized.put("sceneId", sceneId);
-        normalized.put("entryStep", generatedScene.path("entryStep").asText(""));
+        normalized.put("title", firstNonBlank(generatedScene.path("title").asText(""), sourceScene.path("title").asText("")));
+        normalized.put("objective", firstNonBlank(generatedScene.path("objective").asText(""), sourceScene.path("objective").asText("")));
+        normalized.put("location", firstNonBlank(generatedScene.path("location").asText(""), sourceScene.path("location").asText("")));
+        normalized.set("participants", generatedScene.path("participants").isArray() ? generatedScene.path("participants") : sourceScene.path("participants"));
+        normalized.put("entryStep", generatedScene.path("entryStep").asText("ST01"));
         normalized.set("steps", generatedScene.path("steps").isArray() ? generatedScene.path("steps") : objectMapper.createArrayNode());
         scenes.add(normalized);
         root.set("scenes", scenes);
         return root;
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return primary == null || primary.isBlank() ? fallback : primary;
     }
 }
