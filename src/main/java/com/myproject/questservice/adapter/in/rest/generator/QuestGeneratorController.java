@@ -60,7 +60,7 @@ public class QuestGeneratorController {
     }
 
     @GetMapping("/{id}/export-json")
-    public JsonNode exportProjectJson(@PathVariable UUID id) {
+    public Object exportProjectJson(@PathVariable UUID id) {
         return questGeneratorUseCase.exportProjectJson(id);
     }
 

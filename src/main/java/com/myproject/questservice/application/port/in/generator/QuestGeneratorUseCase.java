@@ -20,7 +20,7 @@ public interface QuestGeneratorUseCase {
 
     QuestProjectView approveStage(UUID projectId, StageType stageType);
 
-    JsonNode exportProjectJson(UUID projectId);
+    Object exportProjectJson(UUID projectId);
 
     QuestProjectView importProjectJson(UUID projectId, JsonNode snapshotJson);
 

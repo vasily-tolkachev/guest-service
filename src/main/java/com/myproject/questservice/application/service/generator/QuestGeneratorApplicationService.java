@@ -131,9 +131,10 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public JsonNode exportProjectJson(UUID projectId) {
+    public Object exportProjectJson(UUID projectId) {
         QuestProject project = getRequiredProject(projectId);
-        return toSnapshotJson(project);
+        JsonNode snapshotJson = toSnapshotJson(project);
+        return objectMapper.convertValue(snapshotJson, Object.class);
     }
 
     @Override
