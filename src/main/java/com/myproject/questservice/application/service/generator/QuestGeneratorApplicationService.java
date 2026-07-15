@@ -21,6 +21,7 @@ import com.myproject.questservice.domain.generator.StageType;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -130,6 +131,46 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public JsonNode exportProjectJson(UUID projectId) {
+        QuestProject project = getRequiredProject(projectId);
+        return toSnapshotJson(project);
+    }
+
+    @Override
+    public QuestProjectView importProjectJson(UUID projectId, JsonNode snapshotJson) {
+        if (snapshotJson == null || snapshotJson.isNull()) {
+            throw new BadRequestException("snapshotJson is required");
+        }
+
+        QuestProject project = getRequiredProject(projectId);
+        JsonNode stagesNode = snapshotJson.path("stages");
+        if (!stagesNode.isArray() || stagesNode.isEmpty()) {
+            throw new BadRequestException("snapshotJson.stages must be a non-empty array");
+        }
+
+        List<QuestStage> importedStages = new ArrayList<>();
+        for (JsonNode stageNode : stagesNode) {
+            StageType type = parseStageType(stageNode.path("type").asText(""));
+            JsonNode outputJson = stageNode.path("outputJson");
+            if (outputJson.isMissingNode() || outputJson.isNull()) {
+                outputJson = objectMapper.createObjectNode();
+            }
+
+            StageRevision revision = new StageRevision(
+                    1,
+                    outputJson,
+                    Instant.now()
+            );
+            // REVIEW keeps generation and approval actions available in UI flows.
+            importedStages.add(new QuestStage(type, StageStatus.REVIEW, false, revision));
+        }
+
+        project.setStages(importedStages);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
     public QuestProjectView generateStageStep(UUID projectId, StageType stageType, String step) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, stageType);
@@ -198,6 +239,41 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return stepRunner.steps().get(stepRunner.steps().size() - 1);
+    }
+
+    private StageType parseStageType(String rawType) {
+        if (rawType == null || rawType.isBlank()) {
+            throw new BadRequestException("stage.type is required");
+        }
+        try {
+            return StageType.valueOf(rawType.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Unknown stage.type: " + rawType);
+        }
+    }
+
+    private JsonNode toSnapshotJson(QuestProject project) {
+        var root = objectMapper.createObjectNode();
+        root.put("name", project.getName());
+        root.put("questStyle", project.getQuestStyle());
+        root.put("status", project.getStatus().name());
+
+        var stagesArray = objectMapper.createArrayNode();
+        for (QuestStage stage : project.getStages()) {
+            var stageNode = objectMapper.createObjectNode();
+            stageNode.put("type", stage.getType().name());
+            stageNode.put("status", stage.getStatus().name());
+            stageNode.put("approved", stage.isApproved());
+            stageNode.set(
+                    "outputJson",
+                    stage.getCurrentRevision() == null
+                            ? objectMapper.createObjectNode()
+                            : stage.getCurrentRevision().outputJson()
+            );
+            stagesArray.add(stageNode);
+        }
+        root.set("stages", stagesArray);
+        return root;
     }
 
     private QuestProjectView toView(QuestProject project) {

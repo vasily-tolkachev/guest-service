@@ -2,7 +2,9 @@ package com.myproject.questservice.adapter.in.rest.generator;
 
 import com.myproject.questservice.adapter.in.rest.dto.generator.ConvertDslRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.CreateProjectRequest;
+import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
 import com.myproject.questservice.domain.generator.StageType;
 import jakarta.validation.Valid;
@@ -55,6 +57,16 @@ public class QuestGeneratorController {
     @PostMapping("/{id}/stages/{type}/approve")
     public QuestProjectView approveStage(@PathVariable UUID id, @PathVariable StageType type) {
         return questGeneratorUseCase.approveStage(id, type);
+    }
+
+    @GetMapping("/{id}/export-json")
+    public JsonNode exportProjectJson(@PathVariable UUID id) {
+        return questGeneratorUseCase.exportProjectJson(id);
+    }
+
+    @PostMapping("/{id}/import-json")
+    public QuestProjectView importProjectJson(@PathVariable UUID id, @Valid @RequestBody ImportProjectJsonRequest request) {
+        return questGeneratorUseCase.importProjectJson(id, request.snapshotJson());
     }
 
     @PostMapping(value = "/{id}/export-dsl", produces = MediaType.TEXT_PLAIN_VALUE)
