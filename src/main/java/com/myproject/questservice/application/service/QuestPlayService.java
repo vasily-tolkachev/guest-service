@@ -11,7 +11,12 @@ import com.myproject.questservice.application.port.out.QuestSessionRepositoryPor
 import com.myproject.questservice.application.port.out.QuestRepositoryPort;
 import com.myproject.questservice.auth.CurrentUserProvider;
 import com.myproject.questservice.domain.GameState;
+import com.myproject.questservice.domain.AndCondition;
+import com.myproject.questservice.domain.Condition;
+import com.myproject.questservice.domain.HasFactCondition;
 import com.myproject.questservice.domain.Node;
+import com.myproject.questservice.domain.NotCondition;
+import com.myproject.questservice.domain.OrCondition;
 import com.myproject.questservice.domain.Quest;
 import com.myproject.questservice.domain.QuestDefinition;
 import com.myproject.questservice.domain.QuestEngine;
@@ -20,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -40,6 +47,7 @@ public class QuestPlayService {
         GameView view;
         if (session == null) {
             session = sessionStorePort.create(userId, quest.id(), quest.startNodeId());
+            seedStartFactsFromEntryConditions(quest, session.getGameState());
             QuestEngine engine = new QuestEngine(quest, session.getGameState());
             view = toView(quest, engine, engine.start());
             sessionStorePort.save(session);
@@ -145,6 +153,38 @@ public class QuestPlayService {
             return UUID.fromString(sessionId);
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException("Invalid sessionId format");
+        }
+    }
+
+    private void seedStartFactsFromEntryConditions(Quest quest, GameState state) {
+        Node startNode = quest.nodes().get(quest.startNodeId());
+        if (startNode == null || startNode.entryConditions().isEmpty()) {
+            return;
+        }
+        Set<String> requiredFacts = new LinkedHashSet<>();
+        for (Condition condition : startNode.entryConditions()) {
+            collectPositiveFacts(condition, requiredFacts);
+        }
+        state.getFacts().addAll(requiredFacts);
+    }
+
+    private void collectPositiveFacts(Condition condition, Set<String> facts) {
+        if (condition instanceof HasFactCondition hasFact) {
+            facts.add(hasFact.fact());
+            return;
+        }
+        if (condition instanceof AndCondition andCondition) {
+            andCondition.conditions().forEach(nested -> collectPositiveFacts(nested, facts));
+            return;
+        }
+        if (condition instanceof OrCondition orCondition) {
+            // For start bootstrap we add all positive fact alternatives so entry remains satisfiable.
+            orCondition.conditions().forEach(nested -> collectPositiveFacts(nested, facts));
+            return;
+        }
+        if (condition instanceof NotCondition) {
+            // Negative constraints are intentionally ignored for startup bootstrap.
+            return;
         }
     }
 }
