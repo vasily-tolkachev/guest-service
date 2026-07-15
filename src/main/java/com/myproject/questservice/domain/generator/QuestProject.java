@@ -33,7 +33,8 @@ public class QuestProject {
                 StageType.WORLD,
                 StageType.NPC,
                 StageType.FACTS,
-                StageType.QUEST_OUTLINE
+                StageType.QUEST_OUTLINE,
+                StageType.CHAPTERS
         );
         for (int i = 0; i < orderedTypes.size(); i++) {
             StageType type = orderedTypes.get(i);

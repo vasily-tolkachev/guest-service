@@ -13,6 +13,7 @@ import com.myproject.questservice.application.service.NotImplementedException;
 import com.myproject.questservice.application.service.generator.stage.StageRunner;
 import com.myproject.questservice.application.service.generator.stage.StageRunnerRegistry;
 import com.myproject.questservice.application.service.generator.stage.StepStageRunner;
+import com.myproject.questservice.application.service.generator.stage.ChapterStageRunner;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
 import com.myproject.questservice.domain.generator.StageRevision;
@@ -22,7 +23,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -118,7 +121,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         stage.setApproved(true);
         stage.setStatus(StageStatus.APPROVED);
 
-        if (stageType != StageType.QUEST_OUTLINE) {
+        if (stageType != StageType.CHAPTERS) {
             project.nextStage(stageType).ifPresent(nextStage -> {
                 if (nextStage.getStatus() == StageStatus.NOT_STARTED) {
                     nextStage.setStatus(StageStatus.READY);
@@ -126,6 +129,62 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             });
         }
 
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateChapter(UUID projectId, String chapterId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage chaptersStage = getRequiredStage(project, StageType.CHAPTERS);
+        if (chaptersStage.getStatus() == StageStatus.NOT_STARTED) {
+            chaptersStage.setStatus(StageStatus.READY);
+        }
+        if (chaptersStage.getStatus() != StageStatus.READY && chaptersStage.getStatus() != StageStatus.REVIEW) {
+            throw new ConflictException("CHAPTERS stage is not ready for chapter generation");
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(StageType.CHAPTERS)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for CHAPTERS"));
+        if (!(runner instanceof ChapterStageRunner chapterRunner)) {
+            throw new ConflictException("CHAPTERS stage runner does not support chapter generation");
+        }
+
+        StageStatus previousStatus = chaptersStage.getStatus();
+        chaptersStage.setStatus(StageStatus.GENERATING);
+        JsonNode currentOutput = chaptersStage.getCurrentRevision() == null ? null : chaptersStage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = chapterRunner.generateChapter(projectId, chapterId, currentOutput);
+        } catch (RuntimeException ex) {
+            chaptersStage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = chaptersStage.getCurrentRevision() == null
+                ? 1
+                : chaptersStage.getCurrentRevision().revisionNumber() + 1;
+        chaptersStage.setCurrentRevision(new StageRevision(nextRevisionNumber, markChapterReview(output, chapterId), Instant.now()));
+        chaptersStage.setApproved(false);
+        chaptersStage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView approveChapter(UUID projectId, String chapterId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage chaptersStage = getRequiredStage(project, StageType.CHAPTERS);
+        if (chaptersStage.getCurrentRevision() == null) {
+            throw new ConflictException("CHAPTERS stage has no revision");
+        }
+        JsonNode updatedOutput = markChapterApproved(chaptersStage.getCurrentRevision().outputJson(), chapterId);
+        int nextRevisionNumber = chaptersStage.getCurrentRevision().revisionNumber() + 1;
+        chaptersStage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
+        boolean allApproved = areAllOutlineChaptersApproved(project, updatedOutput);
+        chaptersStage.setApproved(allApproved);
+        chaptersStage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
         projectRepository.save(project);
         return toView(project);
     }
@@ -306,5 +365,72 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 outputJson,
                 revision.createdAt()
         );
+    }
+
+    private JsonNode markChapterReview(JsonNode stageOutput, String chapterId) {
+        var root = objectMapper.createObjectNode();
+        var chapters = objectMapper.createArrayNode();
+        JsonNode existing = stageOutput == null ? null : stageOutput.path("chapters");
+        if (existing != null && existing.isArray()) {
+            for (JsonNode chapter : existing) {
+                String id = chapter.path("chapterId").asText("");
+                var chapterNode = chapter.deepCopy();
+                if (id.equalsIgnoreCase(chapterId)) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) chapterNode).put("status", StageStatus.REVIEW.name());
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) chapterNode).put("approved", false);
+                }
+                chapters.add(chapterNode);
+            }
+        }
+        root.set("chapters", chapters);
+        return root;
+    }
+
+    private JsonNode markChapterApproved(JsonNode stageOutput, String chapterId) {
+        if (stageOutput == null || !stageOutput.path("chapters").isArray()) {
+            throw new ConflictException("No generated chapters to approve");
+        }
+        var root = objectMapper.createObjectNode();
+        var chapters = objectMapper.createArrayNode();
+        boolean found = false;
+        for (JsonNode chapter : stageOutput.path("chapters")) {
+            String id = chapter.path("chapterId").asText("");
+            var chapterNode = chapter.deepCopy();
+            if (id.equalsIgnoreCase(chapterId)) {
+                found = true;
+                ((com.fasterxml.jackson.databind.node.ObjectNode) chapterNode).put("status", StageStatus.APPROVED.name());
+                ((com.fasterxml.jackson.databind.node.ObjectNode) chapterNode).put("approved", true);
+            }
+            chapters.add(chapterNode);
+        }
+        if (!found) {
+            throw new NotFoundException("Generated chapter not found: " + chapterId);
+        }
+        root.set("chapters", chapters);
+        return root;
+    }
+
+    private boolean areAllOutlineChaptersApproved(QuestProject project, JsonNode chaptersOutput) {
+        QuestStage outlineStage = getRequiredStage(project, StageType.QUEST_OUTLINE);
+        JsonNode outlineChapters = outlineStage.getCurrentRevision() == null ? null : outlineStage.getCurrentRevision().outputJson().path("chapters");
+        if (outlineChapters == null || !outlineChapters.isArray() || outlineChapters.isEmpty()) {
+            return false;
+        }
+        Set<String> approvedChapterIds = new HashSet<>();
+        JsonNode generatedChapters = chaptersOutput.path("chapters");
+        if (generatedChapters.isArray()) {
+            for (JsonNode chapter : generatedChapters) {
+                if (chapter.path("approved").asBoolean(false)) {
+                    approvedChapterIds.add(chapter.path("chapterId").asText("").toUpperCase());
+                }
+            }
+        }
+        for (JsonNode chapter : outlineChapters) {
+            String id = chapter.path("id").asText("").toUpperCase();
+            if (!id.isBlank() && !approvedChapterIds.contains(id)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

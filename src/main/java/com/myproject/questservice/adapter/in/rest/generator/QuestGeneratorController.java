@@ -59,6 +59,16 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveStage(id, type);
     }
 
+    @PostMapping("/{id}/stages/CHAPTERS/chapters/{chapterId}/generate")
+    public QuestProjectView generateChapter(@PathVariable UUID id, @PathVariable String chapterId) {
+        return questGeneratorUseCase.generateChapter(id, chapterId);
+    }
+
+    @PostMapping("/{id}/stages/CHAPTERS/chapters/{chapterId}/approve")
+    public QuestProjectView approveChapter(@PathVariable UUID id, @PathVariable String chapterId) {
+        return questGeneratorUseCase.approveChapter(id, chapterId);
+    }
+
     @GetMapping("/{id}/export-json")
     public Object exportProjectJson(@PathVariable UUID id) {
         return questGeneratorUseCase.exportProjectJson(id);
