@@ -94,6 +94,30 @@ public class QuestOutlineStageRunner implements StageRunner {
                  }
                ]
              }
+             IMPORTANT - MYSTERY PROTECTION:
+            
+             Chapters must not reveal the hidden truth from MYSTERY stage.
+            
+             Do not use:
+             - truth explanations
+             - final recontextualization
+             - hidden motivations as confirmed facts
+             - statements that prove one theory is correct
+            
+             The player should discover these through scenes.
+            
+             A chapter may reference:
+             - questions
+             - suspicions
+             - contradictions
+             - possible explanations
+            
+             A chapter must NOT state:
+             - who is responsible
+             - the real motive
+             - the final meaning of events
+             - that a false theory is wrong
+             
              Text values should be in russian.
             """;
 
