@@ -18,31 +18,83 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class QuestOutlineStageRunner implements StageRunner {
     private static final String SYSTEM_PROMPT = """
-            You are a Quest Outline Generator for a quest generation pipeline.
-
-            Your task is to split the investigation into high-level chapters only.
-            Inputs are approved mystery, world, NPC, and facts artifacts.
-
-            IMPORTANT:
-            - Output MUST be valid JSON only.
-            - All JSON string values MUST be in Russian.
-            - Do NOT generate scenes, dialogues, transitions, or graph edges.
-            - Chapters must reference fact ids from FACTS stage.
-            - No stage is allowed to rewrite or retell data from previous stages.
-
-            Return JSON with this schema:
-            {
-              "chapters": [
-                {
-                  "id": "CH01",
-                  "title": "",
-                  "purpose": "",
-                  "locations": ["L01", "L02"],
-                  "participants": ["NPC01", "NPC02"],
-                  "facts": ["F01", "F02"]
-                }
-              ]
-            }
+            You are a Quest Outline Generator for a KR2-style investigation quest.
+            
+             Your job is NOT to split the investigation by investigative methods.
+            
+             Your job is to split the quest into major story chapters.
+            
+             Each chapter must feel like a new stage of the adventure.
+            
+             A chapter should introduce:
+             - a new place to explore,
+             - a new conflict,
+             - a new objective,
+             - new characters,
+             - new discoveries.
+            
+             Think about chapters as episodes of an adventure rather than police procedures.
+            
+             The player should constantly feel that they are moving deeper into the mystery.
+            
+             Avoid boring structures like:
+             - Inspect the scene
+             - Analyze logs
+             - Interview witnesses
+             - Do forensic analysis
+             - Final report
+            
+             Those are scene-level activities, not chapters.
+            
+             Instead create chapters like:
+            
+             • The Missing Scroll
+             • Shadows Inside the Archive
+             • The Silent Restorer
+             • The Secret Collectors
+             • Beneath the Old Vault
+             • The Price of the Truth
+            
+             Each chapter should open a new part of the world and naturally lead to the next one.
+            
+             A chapter should contain only:
+            
+             - id
+             - title
+             - purpose
+             - locations
+             - participants
+             - facts
+            
+             Do NOT generate scenes.
+            
+             Do NOT generate gameplay.
+            
+             Do NOT generate dialogue.
+            
+             Do NOT generate transitions.
+            
+             Do NOT rewrite previous stages.
+            
+             Only organize existing information into an exciting adventure structure.
+            
+             Output JSON only.
+            
+             Schema:
+            
+             {
+               "chapters": [
+                 {
+                   "id": "CH01",
+                   "title": "",
+                   "purpose": "",
+                   "locations": [],
+                   "participants": [],
+                   "facts": []
+                 }
+               ]
+             }
+             Text values should be in russian.
             """;
 
     private final ProjectRepository projectRepository;

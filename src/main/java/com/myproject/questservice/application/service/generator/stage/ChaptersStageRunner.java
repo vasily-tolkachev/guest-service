@@ -24,34 +24,167 @@ import java.util.UUID;
 public class ChaptersStageRunner implements ChapterStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are a Chapter Generator for a quest generation pipeline.
-
-            Your task is to generate scenes for exactly one chapter.
-
-            IMPORTANT:
-            - Output MUST be valid JSON only.
-            - All JSON string values MUST be in Russian.
-            - No stage is allowed to rewrite or retell data from previous stages.
-            - Do NOT generate dialogues.
-            - Keep output compact and structural.
-
-            Return JSON with this schema:
-            {
-              "chapterId": "CH01",
-              "scenes": [
-                {
-                  "id": "SC01",
-                  "title": "",
-                  "situation": "",
-                  "objective": "",
-                  "location": "L01",
-                  "participants": ["NPC01", "NPC02"],
-                  "requiredFacts": ["F01"],
-                  "revealedFacts": ["F02"],
-                  "player_actions": [""],
-                  "obstacles": [""]
-                }
-              ]
-            }
+            
+             Goal:
+             Expand one quest chapter into a set of investigation scenes.
+            
+             The purpose of this stage is to create the gameplay structure of the chapter.
+             Generate only scene structure.
+             Do not write full scenes.
+            
+             A chapter represents a major investigation phase.
+             Each scene inside the chapter should represent a different gameplay situation, discovery, obstacle, or decision.
+            
+             IMPORTANT:
+             - Output MUST be valid JSON only.
+             - All JSON string values MUST be in Russian.
+             - No stage is allowed to rewrite or retell data from previous stages.
+             - Do NOT create new mysteries.
+             - Do NOT create new facts.
+             - Do NOT create new NPCs.
+             - Do NOT create new locations.
+             - Use only IDs from approved artifacts.
+             - No dialogues.
+             - No artistic prose.
+             - No scene text.
+             - Structure only.
+            
+            
+             Input:
+             - Approved MYSTERY.
+             - Approved WORLD.
+             - Approved NPC.
+             - Approved FACTS.
+             - One QUEST_OUTLINE chapter.
+            
+            
+             Your task:
+             Create 3-6 scenes inside this chapter.
+            
+             Each scene must:
+             - have a clear investigation purpose;
+             - happen in a specific location;
+             - involve existing NPCs;
+             - use existing facts;
+             - reveal or connect evidence;
+             - create progression toward understanding the mystery.
+            
+            
+             Output schema:
+            
+             {
+               "chapterId": "CH01",
+            
+               "scenes": [
+                 {
+                   "id": "SC01",
+            
+                   "title": "",
+            
+                   "situation": "",
+            
+                   "objective": "",
+            
+                   "location": "L01",
+            
+                   "participants": [
+                     "NPC01"
+                   ],
+            
+                   "requiredFacts": [
+                     "F01"
+                   ],
+            
+                   "revealedFacts": [
+                     "F02"
+                   ]
+                 }
+               ]
+             }
+            
+            
+             Field rules:
+            
+            
+             title:
+             - Name the gameplay episode.
+             - Should describe a specific event, conflict, discovery, or turning point.
+            
+             Good:
+             "Следы, которых не должно было быть"
+             "Чужой доступ в закрытом журнале"
+             "Свидетель меняет показания"
+            
+             Bad:
+             "Осмотр архива"
+             "Проверка данных"
+            
+            
+             situation:
+             - Describe the current situation at the beginning of the scene.
+             - Explain what problem exists now.
+             - Explain why player needs to act.
+            
+             Do not write atmosphere or cinematic description.
+            
+            
+             objective:
+             - The player's investigation goal in this scene.
+            
+             Good:
+             "Определить, кто получил доступ к хранилищу перед исчезновением."
+            
+             Bad:
+             "Осмотреть помещение."
+            
+            
+             requiredFacts:
+             - Facts already known before this scene.
+             - Use only FACT ids.
+            
+            
+             revealedFacts:
+             - Facts that become available after this scene.
+             - Use only FACT ids.
+            
+            
+             Scene design rules:
+            
+             A chapter should not be a list of locations.
+            
+             Bad structure:
+             Scene 1: Visit archive
+             Scene 2: Visit laboratory
+             Scene 3: Visit office
+            
+             Good structure:
+             Scene 1:
+             Discover that official timeline is impossible.
+            
+             Scene 2:
+             Find the person who benefited from the false timeline.
+            
+             Scene 3:
+             Discover evidence that changes interpretation of previous events.
+            
+            
+             Every chapter should contain:
+             - initial investigation,
+             - complication,
+             - new information,
+             - escalation toward next chapter.
+            
+            
+             Do not create:
+             - steps,
+             - actions,
+             - choices,
+             - endings,
+             - dialogue,
+             - DSL.
+            
+            
+             Generate only JSON. Values should be in russian.
             """;
 
     private final ProjectRepository projectRepository;
