@@ -7,5 +7,6 @@ public enum StageType {
     FACTS,
     QUEST_OUTLINE,
     CHAPTERS,
+    SCENES,
     QUEST_GRAPH
 }

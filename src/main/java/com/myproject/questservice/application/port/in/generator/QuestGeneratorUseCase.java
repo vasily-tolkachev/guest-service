@@ -21,6 +21,8 @@ public interface QuestGeneratorUseCase {
     QuestProjectView approveStage(UUID projectId, StageType stageType);
     QuestProjectView generateChapter(UUID projectId, String chapterId);
     QuestProjectView approveChapter(UUID projectId, String chapterId);
+    QuestProjectView generateScene(UUID projectId, String sceneId);
+    QuestProjectView approveScene(UUID projectId, String sceneId);
 
     Object exportProjectJson(UUID projectId);
 

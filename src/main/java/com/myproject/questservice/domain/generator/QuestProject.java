@@ -34,7 +34,8 @@ public class QuestProject {
                 StageType.NPC,
                 StageType.FACTS,
                 StageType.QUEST_OUTLINE,
-                StageType.CHAPTERS
+                StageType.CHAPTERS,
+                StageType.SCENES
         );
         for (int i = 0; i < orderedTypes.size(); i++) {
             StageType type = orderedTypes.get(i);

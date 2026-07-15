@@ -69,6 +69,16 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveChapter(id, chapterId);
     }
 
+    @PostMapping("/{id}/stages/SCENES/scenes/{sceneId}/generate")
+    public QuestProjectView generateScene(@PathVariable UUID id, @PathVariable String sceneId) {
+        return questGeneratorUseCase.generateScene(id, sceneId);
+    }
+
+    @PostMapping("/{id}/stages/SCENES/scenes/{sceneId}/approve")
+    public QuestProjectView approveScene(@PathVariable UUID id, @PathVariable String sceneId) {
+        return questGeneratorUseCase.approveScene(id, sceneId);
+    }
+
     @GetMapping("/{id}/export-json")
     public Object exportProjectJson(@PathVariable UUID id) {
         return questGeneratorUseCase.exportProjectJson(id);

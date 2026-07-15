@@ -14,6 +14,7 @@ import com.myproject.questservice.application.service.generator.stage.StageRunne
 import com.myproject.questservice.application.service.generator.stage.StageRunnerRegistry;
 import com.myproject.questservice.application.service.generator.stage.StepStageRunner;
 import com.myproject.questservice.application.service.generator.stage.ChapterStageRunner;
+import com.myproject.questservice.application.service.generator.stage.SceneStageRunner;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
 import com.myproject.questservice.domain.generator.StageRevision;
@@ -121,7 +122,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         stage.setApproved(true);
         stage.setStatus(StageStatus.APPROVED);
 
-        if (stageType != StageType.CHAPTERS) {
+        if (stageType != StageType.SCENES) {
             project.nextStage(stageType).ifPresent(nextStage -> {
                 if (nextStage.getStatus() == StageStatus.NOT_STARTED) {
                     nextStage.setStatus(StageStatus.READY);
@@ -185,6 +186,62 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         boolean allApproved = areAllOutlineChaptersApproved(project, updatedOutput);
         chaptersStage.setApproved(allApproved);
         chaptersStage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateScene(UUID projectId, String sceneId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage scenesStage = getRequiredStage(project, StageType.SCENES);
+        if (scenesStage.getStatus() == StageStatus.NOT_STARTED) {
+            scenesStage.setStatus(StageStatus.READY);
+        }
+        if (scenesStage.getStatus() != StageStatus.READY && scenesStage.getStatus() != StageStatus.REVIEW) {
+            throw new ConflictException("SCENES stage is not ready for scene generation");
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(StageType.SCENES)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for SCENES"));
+        if (!(runner instanceof SceneStageRunner sceneRunner)) {
+            throw new ConflictException("SCENES stage runner does not support scene generation");
+        }
+
+        StageStatus previousStatus = scenesStage.getStatus();
+        scenesStage.setStatus(StageStatus.GENERATING);
+        JsonNode currentOutput = scenesStage.getCurrentRevision() == null ? null : scenesStage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = sceneRunner.generateScene(projectId, sceneId, currentOutput);
+        } catch (RuntimeException ex) {
+            scenesStage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = scenesStage.getCurrentRevision() == null
+                ? 1
+                : scenesStage.getCurrentRevision().revisionNumber() + 1;
+        scenesStage.setCurrentRevision(new StageRevision(nextRevisionNumber, markSceneReview(output, sceneId), Instant.now()));
+        scenesStage.setApproved(false);
+        scenesStage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView approveScene(UUID projectId, String sceneId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage scenesStage = getRequiredStage(project, StageType.SCENES);
+        if (scenesStage.getCurrentRevision() == null) {
+            throw new ConflictException("SCENES stage has no revision");
+        }
+        JsonNode updatedOutput = markSceneApproved(scenesStage.getCurrentRevision().outputJson(), sceneId);
+        int nextRevisionNumber = scenesStage.getCurrentRevision().revisionNumber() + 1;
+        scenesStage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
+        boolean allApproved = areAllChapterScenesApproved(project, updatedOutput);
+        scenesStage.setApproved(allApproved);
+        scenesStage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
         projectRepository.save(project);
         return toView(project);
     }
@@ -432,5 +489,86 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return true;
+    }
+
+    private JsonNode markSceneReview(JsonNode stageOutput, String sceneId) {
+        var root = objectMapper.createObjectNode();
+        var scenes = objectMapper.createArrayNode();
+        JsonNode existing = stageOutput == null ? null : stageOutput.path("scenes");
+        if (existing != null && existing.isArray()) {
+            for (JsonNode scene : existing) {
+                String id = scene.path("sceneId").asText("");
+                var sceneNode = scene.deepCopy();
+                if (id.equalsIgnoreCase(sceneId)) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) sceneNode).put("status", StageStatus.REVIEW.name());
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) sceneNode).put("approved", false);
+                }
+                scenes.add(sceneNode);
+            }
+        }
+        root.set("scenes", scenes);
+        return root;
+    }
+
+    private JsonNode markSceneApproved(JsonNode stageOutput, String sceneId) {
+        if (stageOutput == null || !stageOutput.path("scenes").isArray()) {
+            throw new ConflictException("No generated scenes to approve");
+        }
+        var root = objectMapper.createObjectNode();
+        var scenes = objectMapper.createArrayNode();
+        boolean found = false;
+        for (JsonNode scene : stageOutput.path("scenes")) {
+            String id = scene.path("sceneId").asText("");
+            var sceneNode = scene.deepCopy();
+            if (id.equalsIgnoreCase(sceneId)) {
+                found = true;
+                ((com.fasterxml.jackson.databind.node.ObjectNode) sceneNode).put("status", StageStatus.APPROVED.name());
+                ((com.fasterxml.jackson.databind.node.ObjectNode) sceneNode).put("approved", true);
+            }
+            scenes.add(sceneNode);
+        }
+        if (!found) {
+            throw new NotFoundException("Generated scene not found: " + sceneId);
+        }
+        root.set("scenes", scenes);
+        return root;
+    }
+
+    private boolean areAllChapterScenesApproved(QuestProject project, JsonNode scenesOutput) {
+        QuestStage chaptersStage = getRequiredStage(project, StageType.CHAPTERS);
+        JsonNode chapterRuns = chaptersStage.getCurrentRevision() == null ? null : chaptersStage.getCurrentRevision().outputJson().path("chapters");
+        if (chapterRuns == null || !chapterRuns.isArray() || chapterRuns.isEmpty()) {
+            return false;
+        }
+
+        Set<String> requiredSceneIds = new HashSet<>();
+        for (JsonNode chapterRun : chapterRuns) {
+            JsonNode scenes = chapterRun.path("scenes");
+            if (scenes.isArray()) {
+                for (JsonNode scene : scenes) {
+                    String id = scene.path("id").asText("").toUpperCase();
+                    if (!id.isBlank()) {
+                        requiredSceneIds.add(id);
+                    }
+                }
+            }
+        }
+        if (requiredSceneIds.isEmpty()) {
+            return false;
+        }
+
+        Set<String> approvedSceneIds = new HashSet<>();
+        JsonNode generatedScenes = scenesOutput.path("scenes");
+        if (generatedScenes.isArray()) {
+            for (JsonNode scene : generatedScenes) {
+                if (scene.path("approved").asBoolean(false)) {
+                    String id = scene.path("sceneId").asText("").toUpperCase();
+                    if (!id.isBlank()) {
+                        approvedSceneIds.add(id);
+                    }
+                }
+            }
+        }
+        return approvedSceneIds.containsAll(requiredSceneIds);
     }
 }
