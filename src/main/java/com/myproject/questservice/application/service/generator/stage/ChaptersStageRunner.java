@@ -40,11 +40,14 @@ public class ChaptersStageRunner implements ChapterStageRunner {
               "scenes": [
                 {
                   "id": "SC01",
-                  "purpose": "",
+                  "title": "",
+                  "objective": "",
                   "location": "L01",
                   "participants": ["NPC01", "NPC02"],
                   "requiredFacts": ["F01"],
-                  "revealedFacts": ["F02"]
+                  "revealedFacts": ["F02"],
+                  "player_actions": [""],
+                  "obstacles": [""]
                 }
               ]
             }
@@ -154,10 +157,32 @@ public class ChaptersStageRunner implements ChapterStageRunner {
                 Requirements:
                 - generate 3-6 scenes for this chapter
                 - scene ids must be SC01, SC02, ... inside this chapter output
+                - each scene must include: id, title, objective, location, participants, requiredFacts, revealedFacts, player_actions, obstacles
                 - location must reference chapter.locations only
                 - participants must reference chapter.participants only
                 - requiredFacts and revealedFacts must reference chapter.facts only
+                - keep player_actions and obstacles concise, structural, and playable
                 - do not include dialogue or prose blocks
+
+                Example scene format:
+                {
+                  "id": "SC01",
+                  "title": "Осмотр энергомодуля",
+                  "objective": "Понять, является ли повреждение следствием аварии или вмешательства.",
+                  "location": "L02",
+                  "participants": ["NPC03", "NPC05"],
+                  "requiredFacts": ["F02"],
+                  "revealedFacts": ["F14"],
+                  "player_actions": [
+                    "Осмотреть генератор",
+                    "Изучить журналы",
+                    "Поговорить с инженером"
+                  ],
+                  "obstacles": [
+                    "Повреждённое оборудование",
+                    "Инженер не хочет сотрудничать"
+                  ]
+                }
                 """.formatted(project.getName(), style, mysteryJson, worldJson, npcJson, factsJson, chapterJson);
     }
 
