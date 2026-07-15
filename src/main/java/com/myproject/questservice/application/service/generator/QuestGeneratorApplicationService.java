@@ -30,18 +30,15 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private final ProjectRepository projectRepository;
     private final StageRunnerRegistry stageRunnerRegistry;
     private final ObjectMapper objectMapper;
-    private final FlowDslExportService flowDslExportService;
 
     public QuestGeneratorApplicationService(
             ProjectRepository projectRepository,
             StageRunnerRegistry stageRunnerRegistry,
-            ObjectMapper objectMapper,
-            FlowDslExportService flowDslExportService
+            ObjectMapper objectMapper
     ) {
         this.projectRepository = projectRepository;
         this.stageRunnerRegistry = stageRunnerRegistry;
         this.objectMapper = objectMapper;
-        this.flowDslExportService = flowDslExportService;
     }
 
     @Override
@@ -120,7 +117,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         stage.setApproved(true);
         stage.setStatus(StageStatus.APPROVED);
 
-        if (stageType != StageType.QUEST_GRAPH) {
+        if (stageType != StageType.QUEST_OUTLINE) {
             project.nextStage(stageType).ifPresent(nextStage -> {
                 if (nextStage.getStatus() == StageStatus.NOT_STARTED) {
                     nextStage.setStatus(StageStatus.READY);
@@ -174,23 +171,12 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     @Override
     public String exportDsl(UUID projectId) {
-        QuestProject project = getRequiredProject(projectId);
-        QuestStage graphStage = getRequiredStage(project, StageType.QUEST_GRAPH);
-        if (graphStage.getStatus() != StageStatus.APPROVED || graphStage.getCurrentRevision() == null) {
-            throw new ConflictException("DSL export requires APPROVED QUEST_GRAPH stage");
-        }
-        return flowDslExportService.toDsl(project.getName(), graphStage.getCurrentRevision().outputJson());
+        throw new NotImplementedException("DSL export is disabled for JSON-only pipeline");
     }
 
     @Override
     public String convertDsl(String projectName, JsonNode questGraphJson) {
-        if (questGraphJson == null || questGraphJson.isNull()) {
-            throw new BadRequestException("questGraphJson is required");
-        }
-        String normalizedProjectName = (projectName == null || projectName.isBlank())
-                ? "manual_import"
-                : projectName.trim();
-        return flowDslExportService.toDsl(normalizedProjectName, questGraphJson);
+        throw new NotImplementedException("DSL conversion is disabled for JSON-only pipeline");
     }
 
     private QuestProject getRequiredProject(UUID id) {

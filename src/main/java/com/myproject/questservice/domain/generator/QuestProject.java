@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,9 +28,15 @@ public class QuestProject {
 
     public static QuestProject create(String name, String questStyle) {
         List<QuestStage> stages = new ArrayList<>();
-        StageType[] orderedTypes = StageType.values();
-        for (int i = 0; i < orderedTypes.length; i++) {
-            StageType type = orderedTypes[i];
+        List<StageType> orderedTypes = Arrays.asList(
+                StageType.MYSTERY,
+                StageType.WORLD,
+                StageType.NPC,
+                StageType.FACTS,
+                StageType.QUEST_OUTLINE
+        );
+        for (int i = 0; i < orderedTypes.size(); i++) {
+            StageType type = orderedTypes.get(i);
             StageStatus status = i == 0 ? StageStatus.READY : StageStatus.NOT_STARTED;
             stages.add(new QuestStage(type, status, false, null));
         }

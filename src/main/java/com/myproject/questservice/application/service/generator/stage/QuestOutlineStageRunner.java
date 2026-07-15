@@ -16,25 +16,27 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class FactsStageRunner implements StageRunner {
+public class QuestOutlineStageRunner implements StageRunner {
     private static final String SYSTEM_PROMPT = """
-            You are a Facts Generator for a quest generation pipeline.
+            You are a Quest Outline Generator for a quest generation pipeline.
 
-            Your task is to create ONLY canonical facts for the FACTS stage.
-            Inputs are approved mystery, world, and NPC artifacts.
+            Your task is to split the investigation into high-level chapters only.
+            Inputs are approved mystery, world, NPC, and facts artifacts.
 
             IMPORTANT:
             - Output MUST be valid JSON only.
             - All JSON string values MUST be in Russian.
-            - Facts must be canonical statements only.
-            - Do NOT include owner, unlocks, mandatory, visibility, graph, or any extra metadata.
+            - Do NOT generate scenes, dialogues, transitions, or graph edges.
+            - Chapters must reference fact ids from FACTS stage.
 
             Return JSON with this schema:
             {
-              "facts": [
+              "chapters": [
                 {
-                  "id": "F01",
-                  "description": ""
+                  "id": "CH01",
+                  "title": "",
+                  "purpose": "",
+                  "facts": ["F01", "F02"]
                 }
               ]
             }
@@ -45,7 +47,7 @@ public class FactsStageRunner implements StageRunner {
 
     @Override
     public StageType type() {
-        return StageType.FACTS;
+        return StageType.QUEST_OUTLINE;
     }
 
     @Override
@@ -56,12 +58,14 @@ public class FactsStageRunner implements StageRunner {
         QuestStage mysteryStage = requiredApprovedStage(project, StageType.MYSTERY);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage npcStage = requiredApprovedStage(project, StageType.NPC);
+        QuestStage factsStage = requiredApprovedStage(project, StageType.FACTS);
 
         String userPrompt = buildUserPrompt(
                 project,
                 mysteryStage.getCurrentRevision().outputJson(),
                 worldStage.getCurrentRevision().outputJson(),
-                npcStage.getCurrentRevision().outputJson()
+                npcStage.getCurrentRevision().outputJson(),
+                factsStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
     }
@@ -70,17 +74,23 @@ public class FactsStageRunner implements StageRunner {
         QuestStage stage = project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
         if (stage.getStatus() != StageStatus.APPROVED || stage.getCurrentRevision() == null) {
-            throw new ConflictException("FACTS generation requires APPROVED " + type + " stage");
+            throw new ConflictException("QUEST_OUTLINE generation requires APPROVED " + type + " stage");
         }
         return stage;
     }
 
-    private String buildUserPrompt(QuestProject project, JsonNode mysteryJson, JsonNode worldJson, JsonNode npcJson) {
+    private String buildUserPrompt(
+            QuestProject project,
+            JsonNode mysteryJson,
+            JsonNode worldJson,
+            JsonNode npcJson,
+            JsonNode factsJson
+    ) {
         String style = project.getQuestStyle() == null || project.getQuestStyle().isBlank()
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build FACTS stage artifact from approved mystery, world, and NPC.
+                Build QUEST_OUTLINE stage artifact from approved mystery, world, NPC, and facts.
 
                 project_name: %s
                 quest_style: %s
@@ -94,12 +104,15 @@ public class FactsStageRunner implements StageRunner {
                 approved_npc_json:
                 %s
 
+                approved_facts_json:
+                %s
+
                 Requirements:
-                - generate 10-20 canonical investigation facts
-                - each fact must have only id and description
-                - ids must be unique and formatted as F01, F02, ...
-                - do not output any extra fields
+                - produce 3-8 investigation chapters
+                - each chapter includes only id, title, purpose, facts
+                - use fact ids from approved_facts_json
+                - no scenes, no branching, no graph
                 - all text in Russian
-                """.formatted(project.getName(), style, mysteryJson, worldJson, npcJson);
+                """.formatted(project.getName(), style, mysteryJson, worldJson, npcJson, factsJson);
     }
 }
