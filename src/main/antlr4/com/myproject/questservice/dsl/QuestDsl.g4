@@ -17,7 +17,7 @@ nodeDecl
     ;
 
 nodeBody
-    : (blankLines* nodeTitleDecl)? (blankLines* textLine)+ (blankLines* optionDecl)*
+    : (blankLines* nodeTitleDecl)? (blankLines* nodeDirective)* (blankLines* textLine)+ (blankLines* optionDecl)*
     ;
 
 textLine
@@ -29,12 +29,19 @@ nodeTitleDecl
     ;
 
 optionDecl
-    : GT WS* textLineContent endOfLine optionDirective* ARROW WS* ID endOfLine
+    : GT WS* textLineContent endOfLine optionDirective* (ARROW WS* ID endOfLine | END_DIRECTIVE endOfLine)
     ;
 
 optionDirective
     : IF_DIRECTIVE WS+ functionCall endOfLine
     | EFFECT_DIRECTIVE WS+ functionCall endOfLine
+    ;
+
+nodeDirective
+    : LOCATION_DIRECTIVE WS* LPAREN WS* functionArg WS* RPAREN endOfLine
+    | PARTICIPANTS_DIRECTIVE WS* LPAREN WS* functionArgs? WS* RPAREN endOfLine
+    | IF_DIRECTIVE WS+ functionCall endOfLine
+    | REVEAL_DIRECTIVE WS+ functionCall endOfLine
     ;
 
 functionCall
@@ -80,6 +87,10 @@ GT: '>';
 ARROW: '->';
 IF_DIRECTIVE: '@if';
 EFFECT_DIRECTIVE: '@effect';
+LOCATION_DIRECTIVE: '@location';
+PARTICIPANTS_DIRECTIVE: '@participants';
+REVEAL_DIRECTIVE: '@reveal';
+END_DIRECTIVE: '@end';
 LPAREN: '(';
 RPAREN: ')';
 COMMA: ',';

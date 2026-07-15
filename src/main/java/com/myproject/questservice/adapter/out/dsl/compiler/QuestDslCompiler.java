@@ -41,6 +41,10 @@ public class QuestDslCompiler {
             nodes.put(nodeAst.id(), new Node(
                     nodeAst.id(),
                     nodeAst.title(),
+                    nodeAst.location(),
+                    nodeAst.participants(),
+                    toConditions(nodeAst.entryConditions()),
+                    toEffects(nodeAst.entryEffects()),
                     nodeAst.text(),
                     toDomainOptions(nodeAst)
             ));
@@ -57,7 +61,7 @@ public class QuestDslCompiler {
                             buildOptionId(nodeAst.id(), index),
                             optionAst.text(),
                             new Transition(
-                                    optionAst.targetNodeId(),
+                                    optionAst.end() ? null : optionAst.targetNodeId(),
                                     toConditions(optionAst.conditions()),
                                     toEffects(optionAst.effects())
                             )

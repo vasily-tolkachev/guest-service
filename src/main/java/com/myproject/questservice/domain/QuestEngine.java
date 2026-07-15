@@ -15,8 +15,11 @@ public class QuestEngine {
     public Node start() {
         gameState.setCurrentNodeId(quest.startNodeId());
         gameState.getNavigationHistory().clear();
+        Node startNode = requireNode(gameState.getCurrentNodeId());
+        ensureNodeEnterable(startNode);
+        applyNodeEntryEffects(startNode);
         markVisited(gameState.getCurrentNodeId());
-        return requireNode(gameState.getCurrentNodeId());
+        return startNode;
     }
 
     public Node choose(String optionId) {
@@ -28,9 +31,16 @@ public class QuestEngine {
                 .orElseThrow(() -> new IllegalArgumentException("Option not found: " + optionId));
         selected.transition().effects().forEach(effect -> effect.apply(gameState));
         gameState.getNavigationHistory().add(currentNode.id());
+        if (selected.transition().isEnd()) {
+            gameState.setCurrentNodeId(currentNode.id());
+            return currentNode;
+        }
         gameState.setCurrentNodeId(selected.transition().targetNodeId());
+        Node nextNode = requireNode(gameState.getCurrentNodeId());
+        ensureNodeEnterable(nextNode);
+        applyNodeEntryEffects(nextNode);
         markVisited(gameState.getCurrentNodeId());
-        return requireNode(gameState.getCurrentNodeId());
+        return nextNode;
     }
 
     public List<Option> availableOptions(Node node) {
@@ -48,7 +58,8 @@ public class QuestEngine {
     }
 
     public boolean isFinished(Node node) {
-        return availableOptions(node).isEmpty();
+        List<Option> available = availableOptions(node);
+        return available.isEmpty() || available.stream().allMatch(option -> option.transition().isEnd());
     }
 
     public boolean canGoBack() {
@@ -75,7 +86,27 @@ public class QuestEngine {
     }
 
     private boolean isTransitionAvailable(Option option) {
-        return option.transition().conditions().stream()
-                .allMatch(condition -> condition.matches(gameState));
+        if (option.transition().conditions().stream().anyMatch(condition -> !condition.matches(gameState))) {
+            return false;
+        }
+        if (option.transition().isEnd()) {
+            return true;
+        }
+        Node targetNode = quest.nodes().get(option.transition().targetNodeId());
+        if (targetNode == null) {
+            return false;
+        }
+        return targetNode.entryConditions().stream().allMatch(condition -> condition.matches(gameState));
+    }
+
+    private void ensureNodeEnterable(Node node) {
+        boolean canEnter = node.entryConditions().stream().allMatch(condition -> condition.matches(gameState));
+        if (!canEnter) {
+            throw new IllegalStateException("Cannot enter node due to unmet entry conditions: " + node.id());
+        }
+    }
+
+    private void applyNodeEntryEffects(Node node) {
+        node.entryEffects().forEach(effect -> effect.apply(gameState));
     }
 }

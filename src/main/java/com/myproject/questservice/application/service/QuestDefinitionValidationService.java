@@ -23,6 +23,9 @@ public class QuestDefinitionValidationService {
         for (Node node : quest.nodes().values()) {
             node.options().forEach(option -> {
                 String target = option.transition().targetNodeId();
+                if (target == null || target.isBlank()) {
+                    return;
+                }
                 if (!nodeIds.contains(target)) {
                     throw new BadRequestException("Missing target node: " + target);
                 }

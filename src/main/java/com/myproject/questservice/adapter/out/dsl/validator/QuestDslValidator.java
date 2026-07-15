@@ -67,6 +67,8 @@ public class QuestDslValidator {
                         node.column()
                 ));
             }
+            validateConditions(node.entryConditions());
+            validateEffects(node.entryEffects());
         }
 
         String startNodeId = ast.nodes().getFirst().id();
@@ -81,7 +83,15 @@ public class QuestDslValidator {
 
         for (NodeAst node : ast.nodes()) {
             for (OptionAst option : node.options()) {
-                if (!nodeIds.contains(option.targetNodeId())) {
+                if (!option.end() && (option.targetNodeId() == null || option.targetNodeId().isBlank())) {
+                    throw new DslProcessingException(new DslError(
+                            "DSL_VALIDATION_ERROR",
+                            "Option must have target node or @end.",
+                            option.line(),
+                            option.column()
+                    ));
+                }
+                if (!option.end() && !nodeIds.contains(option.targetNodeId())) {
                     throw new DslProcessingException(new DslError(
                             "DSL_VALIDATION_ERROR",
                             "Node '" + option.targetNodeId() + "' not found.",

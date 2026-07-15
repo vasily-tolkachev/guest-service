@@ -11,4 +11,8 @@ public record Transition(
     public Transition(String targetNodeId) {
         this(targetNodeId, List.of(), List.of());
     }
+
+    public boolean isEnd() {
+        return targetNodeId == null || targetNodeId.isBlank();
+    }
 }

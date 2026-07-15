@@ -86,11 +86,47 @@ public class QuestDslParserFacade {
                 textBuilder.append(toLineText(textLines.get(i).textLineContent()));
             }
 
+            String location = null;
+            List<String> participants = new ArrayList<>();
+            List<ConditionAst> entryConditions = new ArrayList<>();
+            List<EffectAst> entryEffects = new ArrayList<>();
+            for (QuestDslParser.NodeDirectiveContext directiveContext : nodeContext.nodeBody().nodeDirective()) {
+                if (directiveContext.LOCATION_DIRECTIVE() != null) {
+                    location = toFunctionArg(directiveContext.functionArg());
+                    continue;
+                }
+                if (directiveContext.PARTICIPANTS_DIRECTIVE() != null) {
+                    participants = toFunctionArgs(directiveContext.functionArgs());
+                    continue;
+                }
+                QuestDslParser.FunctionCallContext functionCallContext = directiveContext.functionCall();
+                Token functionToken = functionCallContext.ID().getSymbol();
+                String name = functionCallContext.ID().getText();
+                List<String> arguments = toFunctionArgs(functionCallContext.functionArgs());
+
+                if (directiveContext.IF_DIRECTIVE() != null) {
+                    entryConditions.add(new ConditionAst(
+                            name,
+                            arguments,
+                            functionToken.getLine(),
+                            functionToken.getCharPositionInLine() + 1
+                    ));
+                } else {
+                    entryEffects.add(new EffectAst(
+                            name,
+                            arguments,
+                            functionToken.getLine(),
+                            functionToken.getCharPositionInLine() + 1
+                    ));
+                }
+            }
+
             List<OptionAst> options = new ArrayList<>();
             for (QuestDslParser.OptionDeclContext optionContext : nodeContext.nodeBody().optionDecl()) {
                 Token optionToken = optionContext.GT().getSymbol();
                 String optionText = toLineText(optionContext.textLineContent());
-                String targetNodeId = optionContext.ID().getText();
+                String targetNodeId = optionContext.ID() == null ? null : optionContext.ID().getText();
+                boolean end = optionContext.END_DIRECTIVE() != null;
                 List<ConditionAst> conditions = new ArrayList<>();
                 List<EffectAst> effects = new ArrayList<>();
                 for (QuestDslParser.OptionDirectiveContext directiveContext : optionContext.optionDirective()) {
@@ -118,6 +154,7 @@ public class QuestDslParserFacade {
                 options.add(new OptionAst(
                         optionText,
                         targetNodeId,
+                        end,
                         conditions,
                         effects,
                         optionToken.getLine(),
@@ -128,6 +165,10 @@ public class QuestDslParserFacade {
             return new NodeAst(
                     nodeId,
                     nodeTitle,
+                    location,
+                    participants,
+                    entryConditions,
+                    entryEffects,
                     textBuilder.toString(),
                     options,
                     nodeIdToken.getLine(),
@@ -162,6 +203,19 @@ public class QuestDslParserFacade {
                 }
             }
             return arguments;
+        }
+
+        private String toFunctionArg(QuestDslParser.FunctionArgContext context) {
+            if (context == null) {
+                return "";
+            }
+            if (context.STRING() != null) {
+                return stripQuotes(context.STRING().getText());
+            }
+            if (context.NUMBER() != null) {
+                return context.NUMBER().getText();
+            }
+            return context.ID().getText();
         }
 
         private String stripQuotes(String value) {
