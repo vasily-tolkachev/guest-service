@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -354,7 +355,78 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     @Override
     public String exportDsl(UUID projectId) {
-        throw new NotImplementedException("DSL export is disabled for JSON-only pipeline");
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage scenesStage = getRequiredStage(project, StageType.SCENES);
+        if (scenesStage.getCurrentRevision() == null) {
+            throw new ConflictException("DSL export requires generated SCENES stage");
+        }
+
+        JsonNode scenesRoot = scenesStage.getCurrentRevision().outputJson();
+        JsonNode scenes = scenesRoot.path("scenes");
+        if (!scenes.isArray() || scenes.isEmpty()) {
+            throw new ConflictException("DSL export requires non-empty SCENES output");
+        }
+
+        String questId = toQuestId(project.getName());
+        String title = project.getName() == null || project.getName().isBlank() ? "Generated Quest" : project.getName().trim();
+        StringBuilder dsl = new StringBuilder();
+        dsl.append("quest ").append(questId).append('\n');
+        dsl.append("title \"").append(escape(title)).append("\"\n\n");
+
+        for (JsonNode scene : scenes) {
+            String sceneId = scene.path("sceneId").asText("");
+            if (sceneId.isBlank()) {
+                continue;
+            }
+            String sceneTitle = scene.path("title").asText(sceneId);
+            String location = scene.path("location").asText("");
+            List<String> participants = readStringArray(scene.path("participants"));
+            JsonNode steps = scene.path("steps");
+            if (!steps.isArray()) {
+                continue;
+            }
+
+            for (JsonNode step : steps) {
+                String stepId = step.path("id").asText("");
+                if (stepId.isBlank()) {
+                    continue;
+                }
+                String nodeId = toNodeId(sceneId, stepId);
+                dsl.append("node ").append(nodeId).append('\n');
+                dsl.append("title \"").append(escape(sceneTitle)).append("\"\n");
+                if (!location.isBlank()) {
+                    dsl.append("@location(").append(location).append(")\n");
+                }
+                if (!participants.isEmpty()) {
+                    dsl.append("@participants(").append(String.join(",", participants)).append(")\n");
+                }
+                for (String requiredFact : readStringArray(step.path("requiredFacts"))) {
+                    dsl.append("@if hasFact(\"").append(escape(requiredFact)).append("\")\n");
+                }
+                for (String revealedFact : readStringArray(step.path("revealedFacts"))) {
+                    dsl.append("@reveal addFact(\"").append(escape(revealedFact)).append("\")\n");
+                }
+                String text = step.path("purpose").asText("");
+                dsl.append("\"").append(escape(text)).append("\"\n");
+
+                JsonNode actions = step.path("actions");
+                if (actions.isArray()) {
+                    for (JsonNode action : actions) {
+                        String actionText = action.path("text").asText("");
+                        String nextStep = action.path("nextStep").asText("");
+                        dsl.append("> \"").append(escape(actionText)).append("\"\n");
+                        if (nextStep == null || nextStep.isBlank()) {
+                            dsl.append("@end\n");
+                        } else {
+                            dsl.append("-> ").append(toNodeId(sceneId, nextStep)).append('\n');
+                        }
+                    }
+                }
+                dsl.append('\n');
+            }
+        }
+
+        return dsl.toString();
     }
 
     @Override
@@ -595,5 +667,42 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return approvedSceneIds.containsAll(requiredSceneIds);
+    }
+
+    private List<String> readStringArray(JsonNode arrayNode) {
+        List<String> result = new ArrayList<>();
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return result;
+        }
+        for (JsonNode item : arrayNode) {
+            String value = item.asText("");
+            if (!value.isBlank()) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
+
+    private String toNodeId(String sceneId, String stepId) {
+        return (sceneId + "_" + stepId).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_\\-]+", "_");
+    }
+
+    private String toQuestId(String projectName) {
+        String base = projectName == null ? "generated_quest" : projectName
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9_\\-]+", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (base.isBlank()) {
+            return "generated_quest";
+        }
+        if (!Character.isLetter(base.charAt(0)) && base.charAt(0) != '_') {
+            base = "q_" + base;
+        }
+        return base;
+    }
+
+    private String escape(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
