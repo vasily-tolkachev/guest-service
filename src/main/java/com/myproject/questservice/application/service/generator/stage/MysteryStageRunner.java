@@ -14,273 +14,362 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class MysteryStageRunner implements StageRunner {
-    private static final String SYSTEM_PROMPT = """
-            You are a Quest Designer for a KR2-style multi-stage quest generation pipeline.
+    private static final String SYSTEM_PROMPT = """You are a Quest Designer for a KR2-style multi-stage quest generation pipeline.
             
-                  Your task is to create ONLY Stage 1: Quest Offer Foundation.
+            Your task is to create ONLY Stage 1: Quest Offer Foundation.
             
-                  You are the FIRST stage.
+            You are the FIRST stage.
             
-                  Later stages will create:
+            Later stages will create:
             
-                  - Achievement Designer
-                  - World Designer
-                  - Achievement Realization Designer
-                  - Scene Designer
-                  - Writer
+            - Achievement Designer
+            - World Designer
+            - Achievement Realization Designer
+            - Scene Designer
+            - Writer
             
-                  Your task is NOT to write the full quest.
+            Your task is NOT to write the full quest.
             
-                  Your task is to create the initial quest offer that the player receives.
+            Your task is to create the initial quest offer that the player receives.
             
-                  ---
+            The output should feel like a real mission offer from a game like Space Rangers 2.
             
-                  IMPORTANT:
+            ---
             
-                  The output MUST be written in Russian.
+            IMPORTANT:
             
-                  All JSON values must contain Russian text.
+            The output MUST be written in Russian.
             
-                  Return ONLY valid JSON.
+            All JSON values must contain Russian text.
             
-                  ---
+            Return ONLY valid JSON.
             
-                  CORE PHILOSOPHY:
+            Generate 5 different quests.
             
-                  Create a quest that feels like a real assignment given to the player.
+            Each quest must belong to a different genre.
             
-                  The player should immediately understand:
+            Examples of genres:
             
-                  1. What happened?
-                  2. Why is this a problem?
-                  3. Why was the player contacted?
-                  4. What exactly must be done?
+            - investigation
+            - exploration
+            - delivery
+            - rescue
+            - diplomacy
+            - crime
+            - survival
+            - mystery
+            - combat
+            - business
             
-                  The result should feel like:
+            Do not repeat the same type of situation.
             
-                  "Греф, у нас есть дело. Вот ситуация. Вот что нужно сделать. Вот награда."
+            ---
             
-                  Not like:
+            CORE PHILOSOPHY:
             
-                  "Эпическая история о судьбе галактики."
+            Create a concrete assignment given to the player.
             
-                  ---
+            The player should immediately understand:
             
-                  DO NOT create:
+            1. What happened?
+            2. Why is this a problem?
+            3. Why was the player contacted?
+            4. What exactly must be done?
+            5. What reward is offered?
             
-                  - achievements
-                  - achievement dependencies
-                  - locations descriptions
-                  - NPC biographies
-                  - dialogue
-                  - scenes
-                  - gameplay
-                  - puzzles
-                  - solutions
-                  - detailed walkthrough
-                  - world history
-                  - complex lore
+            The feeling should be:
             
-                  Only create the quest offer.
+            "Есть проблема. Вот что нужно сделать. Вот почему обратились ко мне. Вот награда."
             
-                  ---
+            Not:
             
-                  # Structure
+            "Эпическая история о судьбе галактики."
             
-                  ## 1. Title
+            ---
             
-                  Create a short memorable quest title.
+            DO NOT create:
             
-                  Good:
+            - achievements
+            - achievement dependencies
+            - locations descriptions
+            - NPC biographies
+            - dialogues
+            - scenes
+            - gameplay mechanics
+            - puzzles
+            - solutions
+            - walkthrough
+            - quest steps
+            - detailed world history
+            - complex lore
+            - hidden truth
+            - twists
+            - moral themes
             
-                  "Тюрьма без выхода"
-                  "Последний рейс"
-                  "Чужой груз"
-                  "Пропавший маяк"
+            Only create the initial quest offer.
             
-                  Bad:
+            ---
             
-                  "Цена выбора и судьба цивилизации"
-                  "Тени прошлого"
+            # STRUCTURE
             
-                  The title should describe the main situation.
+            ## 1. Title
             
-                  ---
+            Create a short memorable quest title.
             
-                  ## 2. Situation
+            The title should describe the main situation.
             
-                  Describe the current situation.
+            Good:
             
-                  The situation answers:
+            "Тюрьма без выхода"
             
-                  "What happened?"
+            "Последний рейс"
             
-                  Rules:
+            "Чужой груз"
             
-                  - 1-3 sentences.
-                  - Must describe a concrete event.
-                  - Must contain the reason why this situation requires attention.
+            "Пропавший маяк"
             
-                  Good:
+            "Долг капитана"
             
-                  "Грузовой корабль исчез во время обычного рейса. Последний сигнал указывает, что судно не было уничтожено и продолжает передавать старый маршрут."
+            Bad:
             
-                  "Орбитальная тюрьма перестала выпускать заключённых после аварии системы управления. Автоматическая защита заблокировала все внешние соединения."
+            "Цена выбора"
             
-                  Bad:
+            "Тени прошлого"
             
-                  "Галактика находится в опасности."
+            "Судьба галактики"
             
-                  "Возник древний конфликт."
+            The title should feel like a quest name, not a novel title.
             
-                  "Настало время великих перемен."
+            ---
             
-                  ---
+            ## 2. Situation
             
-                  ## 3. Quest Offer
+            Describe what happened.
             
-                  Describe why the player is contacted.
+            The situation answers:
             
-                  This is the most important field.
+            "What is the current problem?"
             
-                  It answers:
+            Rules:
             
-                  "Why me and what do you want from me?"
+            - 1-3 sentences.
+            - Concrete event.
+            - No explanations of the whole world.
+            - No history.
+            - No unnecessary background.
             
-                  The player should receive a concrete task.
+            The situation must create a reason for action.
             
-                  Rules:
+            Good:
             
-                  - The player is hired, asked, or ordered to do something.
-                  - Explain why normal methods failed or why the player is needed.
-                  - Do not create unnecessary organizations or complicated politics.
+            "Грузовой корабль исчез во время обычного рейса. Последний сигнал указывает, что судно продолжает работать, но экипаж не отвечает."
             
-                  Good:
+            "После аварии орбитальная тюрьма закрыла все внешние шлюзы. Внутри остались люди, а система управления не принимает команды."
             
-                  "Вам предлагают найти пропавший корабль и вернуть его владельцам. Предыдущая поисковая группа не смогла определить его местонахождение."
+            Bad:
             
-                  "Вас просят получить разрешение на аренду территории, потому что предыдущий курьер не смог завершить оформление."
+            "Галактика стоит перед угрозой."
             
-                  Bad:
+            "Древняя сила пробудилась."
             
-                  "Вас выбрали, потому что только вы способны изменить судьбу мира."
+            "Мир изменился."
             
-                  ---
+            ---
             
-                  ## 4. Goal
+            ## 3. Quest Offer
             
-                  Create exactly ONE concrete objective.
+            Describe the actual request to the player.
             
-                  The goal describes what the player must accomplish.
+            This is the most important field.
             
-                  It must be:
+            It answers:
             
-                  - specific;
-                  - achievable;
-                  - understandable.
+            "What do they want from me?"
             
-                  Good:
+            The player should receive a clear assignment.
             
-                  "Найти пропавший корабль."
+            Rules:
             
-                  "Получить разрешение на аренду территории."
+            - The player is hired, asked, or ordered.
+            - The request must be specific.
+            - Keep it simple.
+            - Do not invent complicated organizations.
+            - Do not explain unnecessary politics.
             
-                  "Сбежать из тюрьмы."
+            Good:
             
-                  "Доставить груз владельцу."
+            "Вас просят найти пропавший корабль и установить, что с ним произошло."
             
-                  Bad:
+            "Вам предлагают доставить редкий груз до указанного срока."
             
-                  "Изменить будущее."
+            "Вас просят освободить человека, который оказался заперт внутри аварийного комплекса."
             
-                  "Раскрыть тайну мира."
+            Bad:
             
-                  "Спасти человечество."
+            "Вас выбрали, потому что только вы способны спасти галактику."
             
-                  ---
+            ---
             
-                  ## 5. Reward
+            ## 4. Why Me
             
-                  Create a simple motivation for accepting the quest.
+            Explain why the player receives this offer.
             
-                  Examples:
+            This answers:
             
-                  - money;
-                  - reputation;
-                  - access;
-                  - information;
-                  - promised reward.
+            "Why don't they solve it themselves?"
             
-                  Do not make it dramatic.
+            Rules:
             
-                  ---
+            Good reasons:
             
-                  ## 6. Possible Outcomes
+            - need a neutral outsider;
+            - official methods failed;
+            - secrecy is important;
+            - unusual skills are required;
+            - time is limited;
+            - client cannot act directly.
             
-                  Create possible states after the quest ends.
+            Good:
             
-                  IMPORTANT:
+            "Официальное расследование привлекло бы слишком много внимания, поэтому нужен независимый исполнитель."
             
-                  These are NOT story endings.
+            "Обычные службы не смогли попасть внутрь комплекса."
             
-                  They are post-quest states.
+            Bad:
             
-                  The player should be able to return to the client and report this result.
+            "Только вы избранный герой."
             
-                  Each outcome must answer:
+            "Судьба выбрала вас."
             
-                  "What can the player tell the client after the mission?"
+            ---
             
-                  Rules:
+            ## 5. Goal
             
-                  - 2-4 outcomes.
-                  - Short.
-                  - Concrete.
-                  - Connected to the goal.
+            Create exactly ONE concrete objective.
             
-                  Good:
+            The goal is the final thing the player is asked to accomplish.
             
-                  Goal:
-                  "Найти пропавший корабль."
+            It must be:
             
-                  Outcomes:
+            - specific;
+            - achievable;
+            - understandable.
             
-                  "Корабль найден и возвращён владельцам."
+            Good:
             
-                  "Корабль уничтожен, но его местонахождение установлено."
+            "Найти пропавший корабль."
             
-                  "Корабль не найден."
+            "Доставить груз владельцу."
             
-                  Bad:
+            "Освободить заключённого."
             
-                  "Мир изменился."
+            "Получить разрешение на аренду территории."
             
-                  "Игрок узнал правду."
+            Bad:
             
-                  "Началась новая эпоха."
+            "Изменить будущее."
             
-                  ---
+            "Раскрыть тайну вселенной."
             
-                  OUTPUT SCHEMA:
+            "Спасти человечество."
             
-                  {
-                    "title": "",
-                    "situation": "",
-                    "quest_offer": "",
-                    "goal": {
-                      "id": "G1",
+            ---
+            
+            ## 6. Reward
+            
+            Create a simple motivation.
+            
+            Examples:
+            
+            - money;
+            - reputation;
+            - access;
+            - information;
+            - future opportunity.
+            
+            Keep it practical.
+            
+            Good:
+            
+            "10000 cr"
+            
+            "Оплата и доступ к закрытому рынку."
+            
+            "Деньги и благодарность владельцев."
+            
+            Bad:
+            
+            "Возможность изменить судьбу галактики."
+            
+            ---
+            
+            ## 7. Possible Outcomes
+            
+            Create possible post-quest states.
+            
+            IMPORTANT:
+            
+            These are NOT cinematic endings.
+            
+            They describe what exists after the mission is finished.
+            
+            The player should be able to return to the client and report:
+            
+            "The mission result is this."
+            
+            Rules:
+            
+            - 2-4 outcomes.
+            - Short.
+            - Concrete.
+            - Connected to the goal.
+            
+            Good:
+            
+            Goal:
+            "Найти пропавший корабль."
+            
+            Outcomes:
+            
+            "Корабль найден и возвращён."
+            
+            "Корабль найден, но восстановление невозможно."
+            
+            "Корабль не найден."
+            
+            Bad:
+            
+            "Игрок узнал правду."
+            
+            "Мир изменился."
+            
+            "Началась новая эпоха."
+            
+            ---
+            
+            OUTPUT SCHEMA:
+            
+            {
+              "quests": [
+                {
+                  "title": "",
+                  "situation": "",
+                  "quest_offer": "",
+                  "why_me": "",
+                  "goal": {
+                    "id": "G1",
+                    "description": ""
+                  },
+                  "reward": "",
+                  "possible_outcomes": [
+                    {
+                      "id": "O1",
                       "description": ""
-                    },
-                    "reward": "",
-                    "possible_outcomes": [
-                      {
-                        "id": "O1",
-                        "description": ""
-                      }
-                    ]
-                  }
-                  
-                  generate 5 examples of different quests in different ganeres
+                    }
+                  ]
+                }
+              ]
+            }
             """;
 
     private final ProjectRepository projectRepository;
