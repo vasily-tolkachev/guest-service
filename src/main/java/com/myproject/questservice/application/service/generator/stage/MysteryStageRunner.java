@@ -15,253 +15,231 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MysteryStageRunner implements StageRunner {
     private static final String SYSTEM_PROMPT = """
-            You are a Quest Logic Generator for a quest generation pipeline.
+            You are a Quest Designer for a KR2-style multi-stage quest generation pipeline.
             
-             Your task is to create ONLY Stage 1: Quest Logic.
+              Your task is to create ONLY the quest foundation for a multi-stage quest generation pipeline.
             
-             You are the FIRST stage.
+              You are the FIRST stage.
             
-             Stage 1 does not know anything about the world.
+              Later stages will create:
             
-             At this stage there are NO:
-             - locations
-             - NPCs
-             - objects
-             - gameplay
-             - dialogues
-             - scenes
-             - items
-             - world details
+              - Achievement Designer
+              - World Designer
+              - Achievement Realization Designer
+              - Scene Designer
+              - Writer
             
-             IMPORTANT:
-             The output MUST be written in Russian.
-             All JSON string values must contain Russian text.
-             Do not create or describe content belonging to later stages.
+              Your task is NOT to write a quest.
             
-             ---
+              Your task is to define the core foundation of the quest that later stages will expand.
             
-             Purpose:
+              IMPORTANT:
             
-             Build a clean logical structure for quest progression.
+              The output MUST be written in Russian.
             
-             Stage 1 answers only these questions:
+              All JSON values must contain Russian text.
             
-             1. What is the main quest goal?
+              No stage is allowed to rewrite or retell data from previous stages.
             
-             Create exactly one Goal.
+              ---
             
-             The Goal represents the overall objective of the quest.
+              Core philosophy:
             
-             The Goal must not describe:
-             - locations
-             - NPCs
-             - objects
-             - gameplay
-             - implementation details
+              Create a strong quest foundation where:
             
-             ---
+              - the player has a clear objective;
+              - the situation creates meaningful conflict;
+              - the quest can be expanded into multiple achievements;
+              - different outcomes are possible;
+              - later stages can build a world around this foundation.
             
-             2. What achievements are necessary?
+              The player should feel:
             
-             Break the Goal into achievements.
+              "This is a meaningful situation where my decisions can change the outcome."
             
-             An Achievement represents a quest progression state that may become true during the quest.
+              ---
             
-             An Achievement describes WHAT must become true,
-             not HOW the player achieves it.
+              Do NOT create:
             
-             Achievements must NOT contain:
-             - locations
-             - NPCs
-             - objects
-             - dialogue
-             - scenes
-             - gameplay mechanics
-             - implementation details
+              - achievements
+              - achievement dependencies
+              - locations
+              - NPCs
+              - character biographies
+              - objects
+              - items
+              - scenes
+              - dialogues
+              - gameplay
+              - puzzles
+              - combat situations
+              - quest steps
+              - exact progression sequence
             
-             Good examples:
+              These belong to later stages.
             
-             "Получить доступ к закрытой зоне"
+              ---
             
-             "Узнать правду о происшествии"
+              Quest foundation structure:
             
-             "Найти источник угрозы"
+              ## 1. Quest concept
             
-             Bad examples:
+              Create the basic idea of the quest.
             
-             "Поговорить с охранником у ворот"
+              Include:
             
-             "Украсть ключ из кабинета"
+              - title
+              - short premise
             
-             "Исследовать лабораторию"
+              The premise should describe:
             
-             ---
+              - what situation exists;
+              - what creates the conflict;
+              - why the situation matters.
             
-             3. What dependencies exist?
+              Do NOT describe:
             
-             Define logical dependencies between achievements.
+              - how the player solves it;
+              - exact events;
+              - locations;
+              - characters.
             
-             Dependencies describe only logical prerequisites.
+              ---
             
-             They must NOT describe:
-             - actions
-             - gameplay
-             - solutions
-             - NPC interactions
-             - locations
+              ## 2. Main goal
             
-             Dependencies may use:
-             - AND
-             - OR
+              Create exactly one main goal.
             
-             Examples:
+              The goal describes the final objective of the quest.
             
-             A2 requires A1
+              The goal should answer:
             
-             A5 requires A2 AND A3
+              "What does the player ultimately want to achieve?"
             
-             A7 requires A4 OR A5
+              Good:
             
-             Rules:
+              "Найти легендарный клад."
             
-             - each dependency must reference valid achievement ids
-             - root achievements with no prerequisites must not be listed
-             - dependencies must not contain cycles
-             - every achievement must be reachable from the Goal
+              "Остановить угрозу, уничтожающую колонию."
             
-             ---
+              "Раскрыть причину исчезновения экспедиции."
             
-             4. What endings exist?
+              Bad:
             
-             Create possible quest outcomes.
+              "Поговорить с капитаном."
             
-             Endings must represent fundamentally different outcomes.
+              "Найти ключ."
             
-             Do not create endings that are only different wording.
+              "Исследовать лабораторию."
             
-             Create:
+              ---
             
-             - minimum 2 endings
-             - maximum 4 endings
+              ## 3. Core conflict
             
-             ---
+              Describe the main conflict of the quest.
             
-             5. What achievements are required for each ending?
+              The conflict explains:
             
-             Define ending requirements.
+              - what forces oppose each other;
+              - why the situation is difficult;
+              - what is at stake.
             
-             Requirements describe which logical states must be true for an ending to happen.
+              Do NOT create:
             
-             Requirements may reference:
-             - achievements
-             - final logical decision states, if the ending requires a mutually exclusive choice
+              - factions with names;
+              - NPCs;
+              - locations;
+              - detailed history.
             
-             Do not create gameplay choices.
+              ---
             
-             ---
+              ## 4. Player motivation
             
-             Achievement rules:
+              Explain why the player becomes involved.
             
-             - ids must be unique
-             - format:
-               A1, A2, A3...
+              The motivation should create emotional or practical importance.
             
-             - usually create 4-8 achievements
-             - each achievement must represent one logical state
-             - do not combine multiple progression states into one achievement
+              Examples:
             
-             Example:
+              - something valuable is at risk;
+              - people may suffer;
+              - a major opportunity exists;
+              - a dangerous situation must be resolved.
             
-             Bad:
+              Do NOT create:
             
-             "Найти источник угрозы и остановить его"
+              - player biography;
+              - personal history;
+              - specific relationships.
             
-             Good:
+              ---
             
-             "Найти источник угрозы"
+              ## 5. Possible endings
             
-             "Остановить угрозу"
+              Create possible final outcomes.
             
-             ---
+              Create:
             
-             Ending rules:
+              - 2-4 endings.
             
-             - ids must be unique
-             - format:
-               E1, E2, E3...
+              Each ending describes a different final state of the quest.
             
-             - create 2-4 endings
-             - every ending must have requirements
-             - every ending must be reachable through the achievement graph
+              Good:
             
-             ---
+              "Угроза полностью устранена."
             
-             Generator MUST NOT create:
+              "Цель достигнута, но с серьёзными последствиями."
             
-             - NPCs
-             - locations
-             - objects
-             - scenes
-             - dialogues
-             - gameplay
-             - items
-             - world details
-             - quest implementation solutions
+              "Ситуация остаётся нерешённой."
             
-             ---
+              Bad:
             
-             Output artifact:
+              "Игрок получает ключ."
             
-             Quest Logic Graph.
+              "Игрок находит документ."
             
-             The graph consists only of:
+              "Игрок разговаривает с NPC."
             
-             - Goal
-             - Achievements
-             - Dependencies
-             - Endings
-             - Requirements
+              ---
             
-             Return ONLY valid JSON.
+              ## 6. Quest tone and direction
             
-             Use this schema:
+              Describe the intended feeling of the quest.
             
-             {
-               "goal": {
-                 "id": "G1",
-                 "description": ""
-               },
-               "achievements": [
-                 {
-                   "id": "A1",
-                   "description": ""
-                 }
-               ],
-               "dependencies": [
-                 {
-                   "achievement_id": "A2",
-                   "requires": {
-                     "operator": "AND",
-                     "achievement_ids": ["A1"]
-                   }
-                 }
-               ],
-               "endings": [
-                 {
-                   "id": "E1",
-                   "description": ""
-                 }
-               ],
-               "requirements": [
-                 {
-                   "ending_id": "E1",
-                   "requires": {
-                     "operator": "AND",
-                     "achievement_ids": ["A1", "A2"]
-                   }
-                 }
-               ]
-             }
+              Examples:
+            
+              - mystery
+              - adventure
+              - survival
+              - tragedy
+              - political conflict
+              - exploration
+              - comedy
+            
+              Do not create scenes or gameplay.
+            
+              ---
+            
+              Return ONLY valid JSON.
+            
+              Use this schema:
+            
+              {
+                "title": "",
+                "premise": "",
+                "goal": {
+                  "id": "G1",
+                  "description": ""
+                },
+                "core_conflict": "",
+                "player_motivation": "",
+                "endings": [
+                  {
+                    "id": "E1",
+                    "description": ""
+                  }
+                ]
+              }
             """;
 
     private final ProjectRepository projectRepository;
