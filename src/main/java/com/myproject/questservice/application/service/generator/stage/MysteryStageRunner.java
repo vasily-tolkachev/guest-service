@@ -14,7 +14,8 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class MysteryStageRunner implements StageRunner {
-    private static final String SYSTEM_PROMPT = """You are a Quest Designer for a KR2-style multi-stage quest generation pipeline.
+    private static final String SYSTEM_PROMPT = """
+            You are a Quest Designer for a KR2-style multi-stage quest generation pipeline.
             
             Your task is to create ONLY Stage 1: Quest Offer Foundation.
             
@@ -389,6 +390,7 @@ public class MysteryStageRunner implements StageRunner {
     }
 
     private String buildUserPrompt(QuestProject project) {
+        System.out.println(project);
         return """
                 Output must strictly follow the JSON schema from system prompt.
                 """;
