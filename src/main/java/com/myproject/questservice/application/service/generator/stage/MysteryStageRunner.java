@@ -279,6 +279,8 @@ public class MysteryStageRunner implements StageRunner {
                       }
                     ]
                   }
+                  
+                  generate 5 examples of different quests in different ganeres
             """;
 
     private final ProjectRepository projectRepository;
@@ -298,16 +300,8 @@ public class MysteryStageRunner implements StageRunner {
     }
 
     private String buildUserPrompt(QuestProject project) {
-        String style = project.getQuestStyle() == null || project.getQuestStyle().isBlank()
-                ? "classic-adventure"
-                : project.getQuestStyle().trim();
         return """
-                Project context:
-                - project_name: %s
-                - quest_style: %s
-
-                Use this context for tone and framing.
                 Output must strictly follow the JSON schema from system prompt.
-                """.formatted(project.getName(), style);
+                """;
     }
 }
