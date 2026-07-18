@@ -35,21 +35,21 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             Return JSON with this schema:
             {
               "achievement_id": "A1",
-              "scenes": [
+              "quests": [
                 {
-                  "id": "A1_SC01",
+                  "id": "A1_Q01",
                   "title": "",
                   "situation": "",
-                  "objective": "",
-                  "location": "L01",
-                  "participants": [],
-                  "required_facts": [],
-                  "revealed_facts": [],
-                  "actions": [
+                  "first_action": {
+                    "id": "ACT01",
+                    "text": ""
+                  },
+                  "choices": [
                     {
-                      "id": "ACT01",
+                      "id": "CH01",
                       "text": "",
-                      "outcome": ""
+                      "consequence": "",
+                      "impact": "high|medium|low"
                     }
                   ]
                 }
@@ -120,10 +120,12 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 %s
 
                 Requirements:
-                - generate 2-6 scenes for this achievement
+                - generate 1-3 short quest entries for this achievement
                 - style should feel like Space Rangers 2 quest episodes
                 - use only world entities from world_json
                 - align scenes with realisation ways for this achievement
+                - take one meaningful first_action and convert it into a choice-driven quest situation
+                - each choice must have a clear consequence and meaningful impact
                 - no global endings or unrelated achievements
                 """.formatted(
                 normalizedAchievementId,
@@ -179,7 +181,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
 
         ObjectNode normalized = objectMapper.createObjectNode();
         normalized.put("achievement_id", achievementId);
-        normalized.set("scenes", generated.path("scenes").isArray() ? generated.path("scenes") : objectMapper.createArrayNode());
+        normalized.set("quests", generated.path("quests").isArray() ? generated.path("quests") : objectMapper.createArrayNode());
         achievements.add(normalized);
         seen.add(achievementId.toUpperCase());
 
