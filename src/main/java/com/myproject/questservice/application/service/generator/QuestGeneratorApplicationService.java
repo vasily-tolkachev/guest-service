@@ -84,6 +84,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, stageType);
+        unlockStageIfEligible(project, stageType, stage);
         if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
             throw new ConflictException("Stage is not ready for generation: " + stageType);
         }
@@ -328,6 +329,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     public QuestProjectView generateStageStep(UUID projectId, StageType stageType, String step) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, stageType);
+        unlockStageIfEligible(project, stageType, stage);
         if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
             throw new ConflictException("Stage is not ready for generation: " + stageType);
         }
@@ -453,6 +455,27 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private QuestStage getRequiredStage(QuestProject project, StageType type) {
         return project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
+    }
+
+    private void unlockStageIfEligible(QuestProject project, StageType stageType, QuestStage stage) {
+        if (stage.getStatus() != StageStatus.NOT_STARTED) {
+            return;
+        }
+        int index = -1;
+        List<QuestStage> stages = project.getStages();
+        for (int i = 0; i < stages.size(); i++) {
+            if (stages.get(i).getType() == stageType) {
+                index = i;
+                break;
+            }
+        }
+        if (index <= 0) {
+            return;
+        }
+        QuestStage previous = stages.get(index - 1);
+        if (previous.getStatus() == StageStatus.APPROVED) {
+            stage.setStatus(StageStatus.READY);
+        }
     }
 
     private String nextStep(StepStageRunner stepRunner, QuestProject project, StageType stageType) {
