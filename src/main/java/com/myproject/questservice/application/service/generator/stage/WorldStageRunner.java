@@ -31,25 +31,41 @@ public class WorldStageRunner implements StageRunner {
             - All JSON string values MUST be in Russian.
             - No stage is allowed to rewrite or retell data from previous stages.
 
-            Keep output concrete and structured for later NPC/FACTS stages.
+            Keep output concrete and structured stages.
 
             Return JSON with this schema:
             {
-              "locations": [
-                {
-                  "id": "L01",
-                  "name": "",
-                  "purpose": ""
-                }
-              ],
-              "organizations": [
-                {
-                  "id": "O01",
-                  "name": ""
-                }
-              ],
-              "rules": [""]
-            }
+               "world": {
+                 "summary": "",
+                 "locations": [
+                   {
+                     "id": "",
+                     "name": "",
+                     "description": "",
+                     "tags": []
+                   }
+                 ],
+                 "objects": [
+                   {
+                     "id": "",
+                     "name": "",
+                     "description": "",
+                     "locationId": "",
+                     "tags": []
+                   }
+                 ]
+               },
+               "npcs": [
+                 {
+                   "id": "",
+                   "name": "",
+                   "description": "",
+                   "role": "",
+                   "locationId": "",
+                   "tags": []
+                 }
+               ]
+             }
             """;
 
     private final ProjectRepository projectRepository;
@@ -104,6 +120,8 @@ public class WorldStageRunner implements StageRunner {
                 Requirements:
                 - generate 3-8 locations with unique ids L01, L02, ...
                 - generate 1-5 organizations with unique ids O01, O02, ...
+                - generate 4-12 NPC entries with unique ids NPC01, NPC02, ...
+                - each NPC organization must reference existing WORLD organization ids (O01, O02, ...)
                 - generate 3-10 world rules as short statements
                 - every generated element must be consistent with approved_constraints_json
                 - do not generate scenes, dialogues, or quest steps
