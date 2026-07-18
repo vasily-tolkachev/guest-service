@@ -85,7 +85,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, stageType);
         unlockStageIfEligible(project, stageType, stage);
-        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
+        if (stage.getStatus() != StageStatus.READY
+                && stage.getStatus() != StageStatus.REVIEW
+                && stage.getStatus() != StageStatus.APPROVED) {
             throw new ConflictException("Stage is not ready for generation: " + stageType);
         }
         StageStatus previousStatus = stage.getStatus();
@@ -330,7 +332,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, stageType);
         unlockStageIfEligible(project, stageType, stage);
-        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW) {
+        if (stage.getStatus() != StageStatus.READY
+                && stage.getStatus() != StageStatus.REVIEW
+                && stage.getStatus() != StageStatus.APPROVED) {
             throw new ConflictException("Stage is not ready for generation: " + stageType);
         }
 
