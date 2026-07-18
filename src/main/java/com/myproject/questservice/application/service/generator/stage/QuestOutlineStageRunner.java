@@ -94,9 +94,9 @@ public class QuestOutlineStageRunner implements StageRunner {
                  }
                ]
              }
-             IMPORTANT - MYSTERY PROTECTION:
+             IMPORTANT - QUEST_DESCRIPTION PROTECTION:
             
-             Chapters must not reveal the hidden truth from MYSTERY stage.
+             Chapters must not reveal the hidden truth from QUEST_DESCRIPTION stage.
             
              Do not use:
              - truth explanations

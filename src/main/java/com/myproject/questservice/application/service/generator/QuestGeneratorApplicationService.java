@@ -510,6 +510,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         List<QuestStageView> stages = project.getStages().stream()
                 .map(stage -> new QuestStageView(
                         stage.getType().name(),
+                        toStageDisplayName(stage.getType()),
                         stage.getStatus().name(),
                         stage.isApproved(),
                         toRevisionView(stage.getCurrentRevision())
@@ -720,5 +721,18 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     private String escape(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private String toStageDisplayName(StageType stageType) {
+        return switch (stageType) {
+            case QUEST_DESCRIPTION -> "Quest Description";
+            case WORLD -> "World";
+            case NPC -> "NPC";
+            case FACTS -> "Facts";
+            case QUEST_OUTLINE -> "Quest Outline";
+            case CHAPTERS -> "Chapters";
+            case SCENES -> "Scenes";
+            case QUEST_GRAPH -> "Quest Graph";
+        };
     }
 }

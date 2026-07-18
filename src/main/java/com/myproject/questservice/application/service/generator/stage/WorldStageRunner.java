@@ -69,7 +69,7 @@ public class WorldStageRunner implements StageRunner {
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_DESCRIPTION));
 
         if (mysteryStage.getStatus() != StageStatus.APPROVED || mysteryStage.getCurrentRevision() == null) {
-            throw new ConflictException("WORLD generation requires APPROVED MYSTERY stage");
+            throw new ConflictException("WORLD generation requires APPROVED QUEST_DESCRIPTION stage");
         }
 
         String userPrompt = buildUserPrompt(project, mysteryStage.getCurrentRevision().outputJson());

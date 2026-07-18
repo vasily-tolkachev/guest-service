@@ -51,7 +51,7 @@ public class ChaptersStageRunner implements ChapterStageRunner {
             
             
              Input:
-             - Approved MYSTERY.
+             - Approved QUEST_DESCRIPTION.
              - Approved WORLD.
              - Approved NPC.
              - Approved FACTS.
