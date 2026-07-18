@@ -32,11 +32,7 @@ public class QuestProject {
                 StageType.QUEST_DESCRIPTION,
                 StageType.QUEST_CONSTRAINTS,
                 StageType.WORLD,
-                StageType.ACHIEVEMENT_REALISATION,
-                StageType.FACTS,
-                StageType.QUEST_OUTLINE,
-                StageType.CHAPTERS,
-                StageType.SCENES
+                StageType.ACHIEVEMENT_REALISATION
         );
         for (int i = 0; i < orderedTypes.size(); i++) {
             StageType type = orderedTypes.get(i);

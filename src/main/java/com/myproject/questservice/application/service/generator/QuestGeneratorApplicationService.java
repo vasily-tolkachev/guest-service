@@ -298,9 +298,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (!importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
                 || !importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)
                 || !importedStagesByType.containsKey(StageType.WORLD)
-                || !importedStagesByType.containsKey(StageType.ACHIEVEMENT_REALISATION)
-                || !importedStagesByType.containsKey(StageType.FACTS)) {
-            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, WORLD, ACHIEVEMENT_REALISATION, FACTS stages");
+                || !importedStagesByType.containsKey(StageType.ACHIEVEMENT_REALISATION)) {
+            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, WORLD, ACHIEVEMENT_REALISATION stages");
         }
 
         for (QuestStage stage : project.getStages()) {
@@ -313,11 +312,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
             stage.setApproved(false);
             stage.setCurrentRevision(null);
-            if (stage.getType() == StageType.QUEST_OUTLINE) {
-                stage.setStatus(StageStatus.READY);
-            } else {
-                stage.setStatus(StageStatus.NOT_STARTED);
-            }
+            stage.setStatus(StageStatus.NOT_STARTED);
         }
 
         projectRepository.save(project);
