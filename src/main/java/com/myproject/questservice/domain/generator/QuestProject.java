@@ -36,7 +36,8 @@ public class QuestProject {
                 StageType.ACHIEVEMENT_REALISATION,
                 StageType.ACHIEVEMENT_INFORMATION_FLOW,
                 StageType.KNOWLEDGE_CHAIN,
-                StageType.ACHIEVEMENT_SCENES
+                StageType.ACHIEVEMENT_SCENES,
+                StageType.ACTION_QUESTS
         );
         for (int i = 0; i < orderedTypes.size(); i++) {
             StageType type = orderedTypes.get(i);

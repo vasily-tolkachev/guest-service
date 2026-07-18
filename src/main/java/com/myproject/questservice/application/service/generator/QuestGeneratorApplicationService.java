@@ -946,6 +946,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             case ACHIEVEMENT_INFORMATION_FLOW -> "Achievement Information Flow";
             case KNOWLEDGE_CHAIN -> "Knowledge Chain";
             case ACHIEVEMENT_SCENES -> "Achievement Scenes";
+            case ACTION_QUESTS -> "Action Quests";
             case FACTS -> "Facts";
             case QUEST_OUTLINE -> "Quest Outline";
             case CHAPTERS -> "Chapters";
