@@ -4,7 +4,7 @@ public enum StageType {
     QUEST_DESCRIPTION,
     QUEST_CONSTRAINTS,
     WORLD,
-    NPC,
+    ACHIEVEMENT_REALISATION,
     FACTS,
     QUEST_OUTLINE,
     CHAPTERS,

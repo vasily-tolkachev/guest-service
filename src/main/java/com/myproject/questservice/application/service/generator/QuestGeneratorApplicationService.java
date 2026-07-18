@@ -298,9 +298,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (!importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
                 || !importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)
                 || !importedStagesByType.containsKey(StageType.WORLD)
-                || !importedStagesByType.containsKey(StageType.NPC)
+                || !importedStagesByType.containsKey(StageType.ACHIEVEMENT_REALISATION)
                 || !importedStagesByType.containsKey(StageType.FACTS)) {
-            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, WORLD, NPC, FACTS stages");
+            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, WORLD, ACHIEVEMENT_REALISATION, FACTS stages");
         }
 
         for (QuestStage stage : project.getStages()) {
@@ -499,6 +499,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
         if ("MYSTERY".equals(rawType.trim())) {
             return StageType.QUEST_DESCRIPTION;
+        }
+        if ("NPC".equals(rawType.trim())) {
+            return StageType.ACHIEVEMENT_REALISATION;
         }
         try {
             return StageType.valueOf(rawType.trim());
@@ -764,7 +767,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             case QUEST_DESCRIPTION -> "Quest Description";
             case QUEST_CONSTRAINTS -> "Quest Constraints";
             case WORLD -> "World";
-            case NPC -> "NPC";
+            case ACHIEVEMENT_REALISATION -> "Achievement Realisation";
             case FACTS -> "Facts";
             case QUEST_OUTLINE -> "Quest Outline";
             case CHAPTERS -> "Chapters";

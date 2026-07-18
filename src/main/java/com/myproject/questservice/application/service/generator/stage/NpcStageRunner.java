@@ -18,13 +18,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NpcStageRunner implements StageRunner {
     private static final String SYSTEM_PROMPT = """
-            You are an NPC Design Generator for a quest generation pipeline.
+            You are an Achievement Realisation Generator for a quest generation pipeline.
 
-            Your task is to create ONLY the NPC design artifact for the NPC stage.
-            Inputs are approved mystery and approved world artifacts.
+            Your task is to create ONLY the ACHIEVEMENT_REALISATION artifact.
+            Inputs are approved QUEST_DESCRIPTION, QUEST_CONSTRAINTS, and WORLD artifacts.
 
-            You are NOT writing scenes, dialogues, or quest flow.
-            Keep NPC definitions role-based and expandable for later stages.
+            Your task is to produce possible ways to reach achievements within current world and constraints.
+            Do NOT create new world entities.
 
             IMPORTANT:
             - Output MUST be valid JSON only.
@@ -33,13 +33,17 @@ public class NpcStageRunner implements StageRunner {
 
             Return JSON with this schema:
             {
-              "npcs": [
+              "achievement_realisations": [
                 {
-                  "id": "NPC01",
-                  "name": "",
-                  "role": "",
-                  "organization": "O01",
-                  "motivation": ""
+                  "achievement_id": "A1",
+                  "ways": [
+                    {
+                      "id": "W1",
+                      "description": "",
+                      "uses_world_elements": ["L01", "O01"],
+                      "fits_constraints": ""
+                    }
+                  ]
                 }
               ]
             }
@@ -50,7 +54,7 @@ public class NpcStageRunner implements StageRunner {
 
     @Override
     public StageType type() {
-        return StageType.NPC;
+        return StageType.ACHIEVEMENT_REALISATION;
     }
 
     @Override
@@ -59,11 +63,13 @@ public class NpcStageRunner implements StageRunner {
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
         QuestStage mysteryStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
+        QuestStage constraintsStage = requiredApprovedStage(project, StageType.QUEST_CONSTRAINTS);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
 
         String userPrompt = buildUserPrompt(
                 project,
                 mysteryStage.getCurrentRevision().outputJson(),
+                constraintsStage.getCurrentRevision().outputJson(),
                 worldStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
@@ -73,17 +79,17 @@ public class NpcStageRunner implements StageRunner {
         QuestStage stage = project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
         if (stage.getStatus() != StageStatus.APPROVED || stage.getCurrentRevision() == null) {
-            throw new ConflictException("NPC generation requires APPROVED " + type + " stage");
+            throw new ConflictException("ACHIEVEMENT_REALISATION generation requires APPROVED " + type + " stage");
         }
         return stage;
     }
 
-    private String buildUserPrompt(QuestProject project, JsonNode mysteryJson, JsonNode worldJson) {
+    private String buildUserPrompt(QuestProject project, JsonNode mysteryJson, JsonNode constraintsJson, JsonNode worldJson) {
         String style = project.getQuestStyle() == null || project.getQuestStyle().isBlank()
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build NPC stage artifact from approved mystery and world.
+                Build ACHIEVEMENT_REALISATION artifact from approved QUEST_DESCRIPTION, QUEST_CONSTRAINTS, and WORLD.
 
                 project_name: %s
                 quest_style: %s
@@ -91,15 +97,19 @@ public class NpcStageRunner implements StageRunner {
                 approved_mystery_json:
                 %s
 
+                approved_constraints_json:
+                %s
+
                 approved_world_json:
                 %s
 
                 Requirements:
-                - generate 4-12 NPC entries
-                - ids must be unique and formatted as NPC01, NPC02, ...
-                - organization must reference organization ids from WORLD (O01, O02, ...)
-                - use concise names and roles, no dialogue and no scene planning
+                - for each achievement from QUEST_DESCRIPTION.achievements generate 2-4 possible ways
+                - each way must stay within approved_constraints_json limits
+                - uses_world_elements must reference existing WORLD ids (Lxx, Oxx, NPCxx if present)
+                - do not create new ids that are not in input world
+                - keep ways concise and implementation-level, but without scene/dialogue writing
                 - all text in Russian
-                """.formatted(project.getName(), style, mysteryJson.toString(), worldJson.toString());
+                """.formatted(project.getName(), style, mysteryJson.toString(), constraintsJson.toString(), worldJson.toString());
     }
 }

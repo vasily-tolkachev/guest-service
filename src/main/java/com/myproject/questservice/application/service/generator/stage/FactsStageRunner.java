@@ -21,7 +21,7 @@ public class FactsStageRunner implements StageRunner {
             You are a Facts Generator for a quest generation pipeline.
 
             Your task is to create ONLY canonical facts for the FACTS stage.
-            Inputs are approved mystery, world, and NPC artifacts.
+            Inputs are approved mystery, world, and ACHIEVEMENT_REALISATION artifacts.
 
             IMPORTANT:
             - Output MUST be valid JSON only.
@@ -56,7 +56,7 @@ public class FactsStageRunner implements StageRunner {
 
         QuestStage mysteryStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
-        QuestStage npcStage = requiredApprovedStage(project, StageType.NPC);
+        QuestStage npcStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
 
         String userPrompt = buildUserPrompt(
                 project,
@@ -81,7 +81,7 @@ public class FactsStageRunner implements StageRunner {
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build FACTS stage artifact from approved mystery, world, and NPC.
+                Build FACTS stage artifact from approved mystery, world, and ACHIEVEMENT_REALISATION.
 
                 project_name: %s
                 quest_style: %s

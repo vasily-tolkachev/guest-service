@@ -212,7 +212,7 @@ public class ChaptersStageRunner implements ChapterStageRunner {
 
         QuestStage mysteryStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
-        QuestStage npcStage = requiredApprovedStage(project, StageType.NPC);
+        QuestStage npcStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
         QuestStage factsStage = requiredApprovedStage(project, StageType.FACTS);
         QuestStage outlineStage = requiredApprovedStage(project, StageType.QUEST_OUTLINE);
 

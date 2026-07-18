@@ -32,7 +32,7 @@ public class QuestProject {
                 StageType.QUEST_DESCRIPTION,
                 StageType.QUEST_CONSTRAINTS,
                 StageType.WORLD,
-                StageType.NPC,
+                StageType.ACHIEVEMENT_REALISATION,
                 StageType.FACTS,
                 StageType.QUEST_OUTLINE,
                 StageType.CHAPTERS,
