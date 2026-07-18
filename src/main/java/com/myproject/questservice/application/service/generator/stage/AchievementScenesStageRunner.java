@@ -25,8 +25,8 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
     private static final String SYSTEM_PROMPT = """
             You are an Achievement Scene Generator for a KR2-style quest pipeline.
 
-            Generate scene/quest content for ONE achievement only.
-            This is manual per-achievement generation.
+            Generate scene/quest content for ONE realisation way only.
+            This is manual per-way generation.
 
             Output MUST be valid JSON only.
             All JSON string values MUST be in Russian.
@@ -35,6 +35,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             Return JSON with this schema:
             {
               "achievement_id": "A1",
+              "way_id": "W1",
               "quests": [
                 {
                   "id": "A1_Q01",
@@ -72,11 +73,11 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
     }
 
     @Override
-    public JsonNode generateAchievement(UUID projectId, String achievementId, JsonNode currentOutput) {
-        if (achievementId == null || achievementId.isBlank()) {
-            throw new ConflictException("achievementId is required");
+    public JsonNode generateAchievement(UUID projectId, String wayId, JsonNode currentOutput) {
+        if (wayId == null || wayId.isBlank()) {
+            throw new ConflictException("wayId is required");
         }
-        String normalizedAchievementId = achievementId.trim();
+        String normalizedWayId = wayId.trim();
 
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
@@ -89,15 +90,16 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
         QuestStage knowledgeChainStage = requiredApprovedStage(project, StageType.KNOWLEDGE_CHAIN);
 
-        JsonNode achievementNode = findAchievement(descriptionStage.getCurrentRevision().outputJson(), normalizedAchievementId);
-        if (achievementNode == null) {
-            throw new NotFoundException("Achievement not found in QUEST_DESCRIPTION: " + normalizedAchievementId);
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
+        if (wayNode == null) {
+            throw new NotFoundException("Way not found in ACHIEVEMENT_REALISATION: " + normalizedWayId);
         }
+        String achievementId = wayNode.path("achievement_id").asText("");
 
         String userPrompt = """
-                Generate scenes for one achievement only.
+                Generate scenes for one way only.
 
-                achievement_id: %s
+                way_id: %s
 
                 quest_description_json:
                 %s
@@ -120,19 +122,19 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 knowledge_chain_json:
                 %s
 
-                achievement_json:
+                way_json:
                 %s
 
                 Requirements:
-                - generate 1-3 short quest entries for this achievement
+                - generate 1-3 short quest entries for this way
                 - style should feel like Space Rangers 2 quest episodes
                 - use only world entities from world_json
-                - align scenes with realisation ways for this achievement
+                - align scenes with this exact realisation way
                 - take one meaningful first_action and convert it into a choice-driven quest situation
                 - each choice must have a clear consequence and meaningful impact
-                - no global endings or unrelated achievements
+                - no global endings or unrelated ways
                 """.formatted(
-                normalizedAchievementId,
+                normalizedWayId,
                 descriptionStage.getCurrentRevision().outputJson(),
                 constraintsStage.getCurrentRevision().outputJson(),
                 analysisStage.getCurrentRevision().outputJson(),
@@ -140,11 +142,11 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 realisationStage.getCurrentRevision().outputJson(),
                 informationFlowStage.getCurrentRevision().outputJson(),
                 knowledgeChainStage.getCurrentRevision().outputJson(),
-                achievementNode
+                wayNode
         );
 
         JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
-        return mergeAchievementOutput(currentOutput, generated, normalizedAchievementId);
+        return mergeAchievementOutput(currentOutput, generated, achievementId, normalizedWayId);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
@@ -156,29 +158,38 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         return stage;
     }
 
-    private JsonNode findAchievement(JsonNode descriptionJson, String achievementId) {
-        JsonNode achievements = descriptionJson.path("achievements");
-        if (!achievements.isArray()) {
+    private JsonNode findWay(JsonNode realisationJson, String wayId) {
+        JsonNode realisations = realisationJson.path("achievement_realisations");
+        if (!realisations.isArray()) {
             return null;
         }
-        for (JsonNode achievement : achievements) {
-            if (achievementId.equalsIgnoreCase(achievement.path("id").asText(""))) {
-                return achievement;
+        for (JsonNode realisation : realisations) {
+            String achievementId = realisation.path("achievement_id").asText("");
+            JsonNode ways = realisation.path("ways");
+            if (!ways.isArray()) {
+                continue;
+            }
+            for (JsonNode way : ways) {
+                if (wayId.equalsIgnoreCase(way.path("id").asText(""))) {
+                    ObjectNode wayWithAchievement = way.deepCopy();
+                    wayWithAchievement.put("achievement_id", achievementId);
+                    return wayWithAchievement;
+                }
             }
         }
         return null;
     }
 
-    private JsonNode mergeAchievementOutput(JsonNode currentOutput, JsonNode generated, String achievementId) {
+    private JsonNode mergeAchievementOutput(JsonNode currentOutput, JsonNode generated, String achievementId, String wayId) {
         ObjectNode root = objectMapper.createObjectNode();
-        ArrayNode achievements = objectMapper.createArrayNode();
+        ArrayNode ways = objectMapper.createArrayNode();
         Set<String> seen = new HashSet<>();
 
-        if (currentOutput != null && currentOutput.path("achievements").isArray()) {
-            for (JsonNode existing : currentOutput.path("achievements")) {
-                String id = existing.path("achievement_id").asText("");
-                if (!id.equalsIgnoreCase(achievementId) && !id.isBlank()) {
-                    achievements.add(existing);
+        if (currentOutput != null && currentOutput.path("ways").isArray()) {
+            for (JsonNode existing : currentOutput.path("ways")) {
+                String id = existing.path("way_id").asText("");
+                if (!id.equalsIgnoreCase(wayId) && !id.isBlank()) {
+                    ways.add(existing);
                     seen.add(id.toUpperCase());
                 }
             }
@@ -186,11 +197,12 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
 
         ObjectNode normalized = objectMapper.createObjectNode();
         normalized.put("achievement_id", achievementId);
+        normalized.put("way_id", wayId);
         normalized.set("quests", generated.path("quests").isArray() ? generated.path("quests") : objectMapper.createArrayNode());
-        achievements.add(normalized);
-        seen.add(achievementId.toUpperCase());
+        ways.add(normalized);
+        seen.add(wayId.toUpperCase());
 
-        root.set("achievements", achievements);
+        root.set("ways", ways);
         return root;
     }
 }

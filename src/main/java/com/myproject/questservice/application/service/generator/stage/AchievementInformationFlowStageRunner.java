@@ -21,7 +21,7 @@ public class AchievementInformationFlowStageRunner implements StageRunner {
             You are an Achievement Information Flow Generator for a quest generation pipeline.
 
             Task:
-            Describe how the player obtains the needed information for each achievement.
+            Describe how the player obtains the needed information for each realisation way.
 
             This stage is AFTER ACHIEVEMENT_REALISATION and BEFORE ACHIEVEMENT_SCENES.
 
@@ -38,6 +38,7 @@ public class AchievementInformationFlowStageRunner implements StageRunner {
               "achievement_information_flow": [
                 {
                   "achievement_id": "A1",
+                  "way_id": "W1",
                   "knowledge_targets": [""],
                   "information_sources": [""],
                   "acquisition_methods": [""],
@@ -87,7 +88,7 @@ public class AchievementInformationFlowStageRunner implements StageRunner {
                 %s
 
                 Requirements:
-                - for each achievement from QUEST_DESCRIPTION.achievements create one flow block
+                - for each way from ACHIEVEMENT_REALISATION create one flow block
                 - explain how player gets required knowledge/information
                 - keep it abstract but actionable for later scene generation
                 - no dialogues, no cinematic text

@@ -254,7 +254,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView generateAchievementScene(UUID projectId, String achievementId) {
+    public QuestProjectView generateAchievementScene(UUID projectId, String wayId) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
         if (stage.getStatus() == StageStatus.NOT_STARTED) {
@@ -275,7 +275,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
         JsonNode output;
         try {
-            output = achievementSceneRunner.generateAchievement(projectId, achievementId, currentOutput);
+            output = achievementSceneRunner.generateAchievement(projectId, wayId, currentOutput);
         } catch (RuntimeException ex) {
             stage.setStatus(previousStatus);
             projectRepository.save(project);
@@ -285,7 +285,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         int nextRevisionNumber = stage.getCurrentRevision() == null
                 ? 1
                 : stage.getCurrentRevision().revisionNumber() + 1;
-        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markAchievementSceneReview(output, achievementId), Instant.now()));
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markAchievementSceneReview(output, wayId), Instant.now()));
         stage.setApproved(false);
         stage.setStatus(StageStatus.REVIEW);
         projectRepository.save(project);
@@ -293,13 +293,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView approveAchievementScene(UUID projectId, String achievementId) {
+    public QuestProjectView approveAchievementScene(UUID projectId, String wayId) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
         if (stage.getCurrentRevision() == null) {
             throw new ConflictException("ACHIEVEMENT_SCENES stage has no revision");
         }
-        JsonNode updatedOutput = markAchievementSceneApproved(stage.getCurrentRevision().outputJson(), achievementId);
+        JsonNode updatedOutput = markAchievementSceneApproved(stage.getCurrentRevision().outputJson(), wayId);
         int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
         stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
         boolean allApproved = areAllAchievementScenesApproved(project, updatedOutput);
@@ -330,6 +330,23 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         JsonNode stagesNode = snapshotNode.path("stages");
         if (!stagesNode.isArray() || stagesNode.isEmpty()) {
             throw new BadRequestException("snapshotJson.stages must be a non-empty array");
+        }
+
+        String importedName = snapshotNode.path("name").asText("").trim();
+        if (!importedName.isBlank()) {
+            project.setName(importedName);
+        }
+        String importedQuestStyle = snapshotNode.path("questStyle").asText("").trim();
+        if (!importedQuestStyle.isBlank()) {
+            project.setQuestStyle(importedQuestStyle);
+        }
+        String importedProjectStatus = snapshotNode.path("status").asText("").trim();
+        if (!importedProjectStatus.isBlank()) {
+            try {
+                project.setStatus(com.myproject.questservice.domain.generator.QuestProjectStatus.valueOf(importedProjectStatus));
+            } catch (IllegalArgumentException ex) {
+                throw new BadRequestException("Unknown project.status: " + importedProjectStatus);
+            }
         }
 
         Map<StageType, ImportedStage> importedStagesByType = new EnumMap<>(StageType.class);
@@ -800,81 +817,86 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return approvedSceneIds.containsAll(requiredSceneIds);
     }
 
-    private JsonNode markAchievementSceneReview(JsonNode stageOutput, String achievementId) {
+    private JsonNode markAchievementSceneReview(JsonNode stageOutput, String wayId) {
         var root = objectMapper.createObjectNode();
-        var achievements = objectMapper.createArrayNode();
-        JsonNode existing = stageOutput == null ? null : stageOutput.path("achievements");
+        var ways = objectMapper.createArrayNode();
+        JsonNode existing = stageOutput == null ? null : stageOutput.path("ways");
         if (existing != null && existing.isArray()) {
-            for (JsonNode achievement : existing) {
-                String id = achievement.path("achievement_id").asText("");
-                var achievementNode = achievement.deepCopy();
-                if (id.equalsIgnoreCase(achievementId)) {
-                    ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("status", StageStatus.REVIEW.name());
-                    ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("approved", false);
+            for (JsonNode way : existing) {
+                String id = way.path("way_id").asText("");
+                var wayNode = way.deepCopy();
+                if (id.equalsIgnoreCase(wayId)) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("status", StageStatus.REVIEW.name());
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("approved", false);
                 }
-                achievements.add(achievementNode);
+                ways.add(wayNode);
             }
         }
-        root.set("achievements", achievements);
+        root.set("ways", ways);
         return root;
     }
 
-    private JsonNode markAchievementSceneApproved(JsonNode stageOutput, String achievementId) {
-        if (stageOutput == null || !stageOutput.path("achievements").isArray()) {
+    private JsonNode markAchievementSceneApproved(JsonNode stageOutput, String wayId) {
+        if (stageOutput == null || !stageOutput.path("ways").isArray()) {
             throw new ConflictException("No generated achievement scenes to approve");
         }
         var root = objectMapper.createObjectNode();
-        var achievements = objectMapper.createArrayNode();
+        var ways = objectMapper.createArrayNode();
         boolean found = false;
-        for (JsonNode achievement : stageOutput.path("achievements")) {
-            String id = achievement.path("achievement_id").asText("");
-            var achievementNode = achievement.deepCopy();
-            if (id.equalsIgnoreCase(achievementId)) {
+        for (JsonNode way : stageOutput.path("ways")) {
+            String id = way.path("way_id").asText("");
+            var wayNode = way.deepCopy();
+            if (id.equalsIgnoreCase(wayId)) {
                 found = true;
-                ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("status", StageStatus.APPROVED.name());
-                ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("approved", true);
+                ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("status", StageStatus.APPROVED.name());
+                ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("approved", true);
             }
-            achievements.add(achievementNode);
+            ways.add(wayNode);
         }
         if (!found) {
-            throw new NotFoundException("Generated achievement scene block not found: " + achievementId);
+            throw new NotFoundException("Generated achievement scene block not found: " + wayId);
         }
-        root.set("achievements", achievements);
+        root.set("ways", ways);
         return root;
     }
 
     private boolean areAllAchievementScenesApproved(QuestProject project, JsonNode achievementScenesOutput) {
-        QuestStage descriptionStage = getRequiredStage(project, StageType.QUEST_DESCRIPTION);
-        JsonNode achievementsInDescription = descriptionStage.getCurrentRevision() == null
+        QuestStage realisationStage = getRequiredStage(project, StageType.ACHIEVEMENT_REALISATION);
+        JsonNode realisations = realisationStage.getCurrentRevision() == null
                 ? null
-                : descriptionStage.getCurrentRevision().outputJson().path("achievements");
-        if (achievementsInDescription == null || !achievementsInDescription.isArray() || achievementsInDescription.isEmpty()) {
+                : realisationStage.getCurrentRevision().outputJson().path("achievement_realisations");
+        if (realisations == null || !realisations.isArray() || realisations.isEmpty()) {
             return false;
         }
-        Set<String> requiredAchievementIds = new HashSet<>();
-        for (JsonNode achievement : achievementsInDescription) {
-            String id = achievement.path("id").asText("").toUpperCase();
-            if (!id.isBlank()) {
-                requiredAchievementIds.add(id);
-            }
-        }
-        if (requiredAchievementIds.isEmpty()) {
-            return false;
-        }
-
-        Set<String> approvedAchievementIds = new HashSet<>();
-        JsonNode generatedAchievements = achievementScenesOutput.path("achievements");
-        if (generatedAchievements.isArray()) {
-            for (JsonNode achievement : generatedAchievements) {
-                if (achievement.path("approved").asBoolean(false)) {
-                    String id = achievement.path("achievement_id").asText("").toUpperCase();
+        Set<String> requiredWayIds = new HashSet<>();
+        for (JsonNode realisation : realisations) {
+            JsonNode ways = realisation.path("ways");
+            if (ways.isArray()) {
+                for (JsonNode way : ways) {
+                    String id = way.path("id").asText("").toUpperCase();
                     if (!id.isBlank()) {
-                        approvedAchievementIds.add(id);
+                        requiredWayIds.add(id);
                     }
                 }
             }
         }
-        return approvedAchievementIds.containsAll(requiredAchievementIds);
+        if (requiredWayIds.isEmpty()) {
+            return false;
+        }
+
+        Set<String> approvedWayIds = new HashSet<>();
+        JsonNode generatedWays = achievementScenesOutput.path("ways");
+        if (generatedWays.isArray()) {
+            for (JsonNode way : generatedWays) {
+                if (way.path("approved").asBoolean(false)) {
+                    String id = way.path("way_id").asText("").toUpperCase();
+                    if (!id.isBlank()) {
+                        approvedWayIds.add(id);
+                    }
+                }
+            }
+        }
+        return approvedWayIds.containsAll(requiredWayIds);
     }
 
     private List<String> readStringArray(JsonNode arrayNode) {

@@ -21,7 +21,7 @@ public class KnowledgeChainStageRunner implements StageRunner {
             You are a Knowledge Chain Generator for a quest generation pipeline.
 
             Task:
-            Build knowledge-acquisition chains for each achievement.
+            Build knowledge-acquisition chains for each realisation way.
 
             The chain answers:
             "How does the player understand what to do?"
@@ -39,6 +39,7 @@ public class KnowledgeChainStageRunner implements StageRunner {
               "knowledge_chains": [
                 {
                   "achievement_id": "A1",
+                  "way_id": "W1",
                   "target_achievement": "",
                   "knowledge_chain": [
                     {
@@ -85,7 +86,7 @@ public class KnowledgeChainStageRunner implements StageRunner {
                 %s
 
                 Requirements:
-                - produce one chain per achievement
+                - produce one chain per way_id from ACHIEVEMENT_INFORMATION_FLOW
                 - each chain must have 4-8 linked knowledge steps
                 - each step must describe how new knowledge is obtained
                 - chain should be playable and logically connected
