@@ -62,7 +62,8 @@ public class OpenAiAiClient implements AiClient {
                                     new Message("system", systemPrompt),
                                     new Message("user", userPrompt)
                             },
-                            new ResponseFormat("json_object")
+                            new ResponseFormat("json_object"),
+                            false
                     ))
                     .retrieve()
                     .body(ChatCompletionResponse.class);
@@ -91,7 +92,8 @@ public class OpenAiAiClient implements AiClient {
     private record ChatCompletionRequest(
             String model,
             Message[] messages,
-            ResponseFormat response_format
+            ResponseFormat response_format,
+            boolean store
     ) {
     }
 

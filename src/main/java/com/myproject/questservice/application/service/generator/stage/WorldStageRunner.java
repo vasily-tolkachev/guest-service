@@ -57,7 +57,7 @@ public class WorldStageRunner implements StageRunner {
                    }
                  ]
                },
-               "npcs": [
+               "npc": [
                  {
                    "id": "",
                    "name": "",
