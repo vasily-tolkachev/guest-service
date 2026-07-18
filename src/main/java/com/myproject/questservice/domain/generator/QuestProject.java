@@ -34,6 +34,7 @@ public class QuestProject {
                 StageType.ACHIEVEMENT_RESOURCE_ANALYSIS,
                 StageType.WORLD,
                 StageType.ACHIEVEMENT_REALISATION,
+                StageType.ACHIEVEMENT_INFORMATION_FLOW,
                 StageType.ACHIEVEMENT_SCENES
         );
         for (int i = 0; i < orderedTypes.size(); i++) {

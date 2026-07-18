@@ -86,6 +86,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         QuestStage analysisStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_RESOURCE_ANALYSIS);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+        QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
 
         JsonNode achievementNode = findAchievement(descriptionStage.getCurrentRevision().outputJson(), normalizedAchievementId);
         if (achievementNode == null) {
@@ -112,6 +113,9 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 achievement_realisation_json:
                 %s
 
+                achievement_information_flow_json:
+                %s
+
                 achievement_json:
                 %s
 
@@ -128,6 +132,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 analysisStage.getCurrentRevision().outputJson(),
                 worldStage.getCurrentRevision().outputJson(),
                 realisationStage.getCurrentRevision().outputJson(),
+                informationFlowStage.getCurrentRevision().outputJson(),
                 achievementNode
         );
 
