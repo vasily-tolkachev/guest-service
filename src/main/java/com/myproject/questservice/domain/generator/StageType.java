@@ -1,7 +1,7 @@
 package com.myproject.questservice.domain.generator;
 
 public enum StageType {
-    MYSTERY,
+    QUEST_DESCRIPTION,
     WORLD,
     NPC,
     FACTS,

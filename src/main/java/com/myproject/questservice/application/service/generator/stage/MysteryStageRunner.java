@@ -378,7 +378,7 @@ public class MysteryStageRunner implements StageRunner {
 
     @Override
     public StageType type() {
-        return StageType.MYSTERY;
+        return StageType.QUEST_DESCRIPTION;
     }
 
     @Override

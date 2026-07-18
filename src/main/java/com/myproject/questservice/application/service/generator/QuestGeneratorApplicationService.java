@@ -272,32 +272,31 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             throw new BadRequestException("snapshotJson.stages must be a non-empty array");
         }
 
-        Map<StageType, JsonNode> importedJsonByType = new EnumMap<>(StageType.class);
+        Map<StageType, ImportedStage> importedStagesByType = new EnumMap<>(StageType.class);
         for (JsonNode stageNode : stagesNode) {
             StageType type = parseStageType(stageNode.path("type").asText(""));
-            if (type != StageType.MYSTERY && type != StageType.WORLD && type != StageType.NPC && type != StageType.FACTS) {
-                continue;
-            }
             JsonNode outputJson = stageNode.path("outputJson");
             if (outputJson.isMissingNode() || outputJson.isNull()) {
                 outputJson = objectMapper.createObjectNode();
             }
-            importedJsonByType.put(type, outputJson);
+            StageStatus importedStatus = parseStageStatus(stageNode.path("status").asText("APPROVED"));
+            boolean importedApproved = stageNode.path("approved").asBoolean(importedStatus == StageStatus.APPROVED);
+            importedStagesByType.put(type, new ImportedStage(outputJson, importedStatus, importedApproved));
         }
 
-        if (!importedJsonByType.containsKey(StageType.MYSTERY)
-                || !importedJsonByType.containsKey(StageType.WORLD)
-                || !importedJsonByType.containsKey(StageType.NPC)
-                || !importedJsonByType.containsKey(StageType.FACTS)) {
-            throw new BadRequestException("Import must include MYSTERY, WORLD, NPC, FACTS stages");
+        if (!importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
+                || !importedStagesByType.containsKey(StageType.WORLD)
+                || !importedStagesByType.containsKey(StageType.NPC)
+                || !importedStagesByType.containsKey(StageType.FACTS)) {
+            throw new BadRequestException("Import must include QUEST_DESCRIPTION, WORLD, NPC, FACTS stages");
         }
 
         for (QuestStage stage : project.getStages()) {
-            JsonNode importedOutput = importedJsonByType.get(stage.getType());
-            if (importedOutput != null) {
-                stage.setCurrentRevision(new StageRevision(1, importedOutput, Instant.now()));
-                stage.setApproved(true);
-                stage.setStatus(StageStatus.APPROVED);
+            ImportedStage importedStage = importedStagesByType.get(stage.getType());
+            if (importedStage != null) {
+                stage.setCurrentRevision(new StageRevision(1, importedStage.outputJson(), Instant.now()));
+                stage.setApproved(importedStage.approved());
+                stage.setStatus(importedStage.status());
                 continue;
             }
             stage.setApproved(false);
@@ -311,6 +310,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
         projectRepository.save(project);
         return toView(project);
+    }
+
+    private record ImportedStage(JsonNode outputJson, StageStatus status, boolean approved) {
     }
 
     @Override
@@ -459,10 +461,24 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (rawType == null || rawType.isBlank()) {
             throw new BadRequestException("stage.type is required");
         }
+        if ("MYSTERY".equals(rawType.trim())) {
+            return StageType.QUEST_DESCRIPTION;
+        }
         try {
             return StageType.valueOf(rawType.trim());
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException("Unknown stage.type: " + rawType);
+        }
+    }
+
+    private StageStatus parseStageStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            return StageStatus.APPROVED;
+        }
+        try {
+            return StageStatus.valueOf(rawStatus.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Unknown stage.status: " + rawStatus);
         }
     }
 

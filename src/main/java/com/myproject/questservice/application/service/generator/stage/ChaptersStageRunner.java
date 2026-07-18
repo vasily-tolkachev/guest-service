@@ -210,7 +210,7 @@ public class ChaptersStageRunner implements ChapterStageRunner {
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
-        QuestStage mysteryStage = requiredApprovedStage(project, StageType.MYSTERY);
+        QuestStage mysteryStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage npcStage = requiredApprovedStage(project, StageType.NPC);
         QuestStage factsStage = requiredApprovedStage(project, StageType.FACTS);

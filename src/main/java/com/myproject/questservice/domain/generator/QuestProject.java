@@ -29,7 +29,7 @@ public class QuestProject {
     public static QuestProject create(String name, String questStyle) {
         List<QuestStage> stages = new ArrayList<>();
         List<StageType> orderedTypes = Arrays.asList(
-                StageType.MYSTERY,
+                StageType.QUEST_DESCRIPTION,
                 StageType.WORLD,
                 StageType.NPC,
                 StageType.FACTS,

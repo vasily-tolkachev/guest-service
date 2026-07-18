@@ -65,8 +65,8 @@ public class WorldStageRunner implements StageRunner {
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
-        QuestStage mysteryStage = project.findStage(StageType.MYSTERY)
-                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.MYSTERY));
+        QuestStage mysteryStage = project.findStage(StageType.QUEST_DESCRIPTION)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_DESCRIPTION));
 
         if (mysteryStage.getStatus() != StageStatus.APPROVED || mysteryStage.getCurrentRevision() == null) {
             throw new ConflictException("WORLD generation requires APPROVED MYSTERY stage");
