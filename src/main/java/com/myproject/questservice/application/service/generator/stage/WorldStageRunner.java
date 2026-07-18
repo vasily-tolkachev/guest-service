@@ -21,7 +21,7 @@ public class WorldStageRunner implements StageRunner {
             You are a World Design Generator for a quest generation pipeline.
 
             Your task is to create ONLY the world design artifact for the WORLD stage.
-            Inputs QUEST_DESCRIPTION and QUEST_CONSTRAINTS are already approved and should be used as the foundation.
+            Inputs QUEST_DESCRIPTION, QUEST_CONSTRAINTS and ACHIEVEMENT_RESOURCE_ANALYSIS are already approved and should be used as the foundation.
 
             You are NOT writing quest scenes, dialogues, or flow.
             You are NOT creating NPC biographies.
@@ -87,6 +87,8 @@ public class WorldStageRunner implements StageRunner {
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_DESCRIPTION));
         QuestStage constraintsStage = project.findStage(StageType.QUEST_CONSTRAINTS)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_CONSTRAINTS));
+        QuestStage resourceAnalysisStage = project.findStage(StageType.ACHIEVEMENT_RESOURCE_ANALYSIS)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.ACHIEVEMENT_RESOURCE_ANALYSIS));
 
         if (mysteryStage.getStatus() != StageStatus.APPROVED || mysteryStage.getCurrentRevision() == null) {
             throw new ConflictException("WORLD generation requires APPROVED QUEST_DESCRIPTION stage");
@@ -94,21 +96,25 @@ public class WorldStageRunner implements StageRunner {
         if (constraintsStage.getStatus() != StageStatus.APPROVED || constraintsStage.getCurrentRevision() == null) {
             throw new ConflictException("WORLD generation requires APPROVED QUEST_CONSTRAINTS stage");
         }
+        if (resourceAnalysisStage.getStatus() != StageStatus.APPROVED || resourceAnalysisStage.getCurrentRevision() == null) {
+            throw new ConflictException("WORLD generation requires APPROVED ACHIEVEMENT_RESOURCE_ANALYSIS stage");
+        }
 
         String userPrompt = buildUserPrompt(
                 project,
                 mysteryStage.getCurrentRevision().outputJson(),
-                constraintsStage.getCurrentRevision().outputJson()
+                constraintsStage.getCurrentRevision().outputJson(),
+                resourceAnalysisStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
     }
 
-    private String buildUserPrompt(QuestProject project, JsonNode approvedMysteryJson, JsonNode approvedConstraintsJson) {
+    private String buildUserPrompt(QuestProject project, JsonNode approvedMysteryJson, JsonNode approvedConstraintsJson, JsonNode approvedResourceAnalysisJson) {
         String style = project.getQuestStyle() == null || project.getQuestStyle().isBlank()
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build WORLD stage artifact from approved QUEST_DESCRIPTION and QUEST_CONSTRAINTS.
+                Build WORLD stage artifact from approved QUEST_DESCRIPTION, QUEST_CONSTRAINTS, and ACHIEVEMENT_RESOURCE_ANALYSIS.
 
                 project_name: %s
                 quest_style: %s
@@ -119,6 +125,9 @@ public class WorldStageRunner implements StageRunner {
                 approved_constraints_json:
                 %s
 
+                approved_achievement_resource_analysis_json:
+                %s
+
                 Requirements:
                 - generate 3-8 locations with unique ids L01, L02, ...
                 - generate 1-5 organizations with unique ids O01, O02, ...
@@ -126,8 +135,9 @@ public class WorldStageRunner implements StageRunner {
                 - each NPC organization must reference existing WORLD organization ids (O01, O02, ...)
                 - generate 3-10 world rules as short statements
                 - every generated element must be consistent with approved_constraints_json
+                - generated world should enable capability patterns from approved_achievement_resource_analysis_json
                 - do not generate scenes, dialogues, or quest steps
                 - all text in Russian
-                """.formatted(project.getName(), style, approvedMysteryJson.toString(), approvedConstraintsJson.toString());
+                """.formatted(project.getName(), style, approvedMysteryJson.toString(), approvedConstraintsJson.toString(), approvedResourceAnalysisJson.toString());
     }
 }

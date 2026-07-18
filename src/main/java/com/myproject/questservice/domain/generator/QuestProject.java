@@ -31,6 +31,7 @@ public class QuestProject {
         List<StageType> orderedTypes = Arrays.asList(
                 StageType.QUEST_DESCRIPTION,
                 StageType.QUEST_CONSTRAINTS,
+                StageType.ACHIEVEMENT_RESOURCE_ANALYSIS,
                 StageType.WORLD,
                 StageType.ACHIEVEMENT_REALISATION
         );

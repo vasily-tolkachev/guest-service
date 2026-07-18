@@ -294,12 +294,21 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                     new ImportedStage(objectMapper.createObjectNode(), StageStatus.APPROVED, true)
             );
         }
+        if (!importedStagesByType.containsKey(StageType.ACHIEVEMENT_RESOURCE_ANALYSIS)
+                && importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
+                && importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)) {
+            importedStagesByType.put(
+                    StageType.ACHIEVEMENT_RESOURCE_ANALYSIS,
+                    new ImportedStage(objectMapper.createObjectNode(), StageStatus.APPROVED, true)
+            );
+        }
 
         if (!importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
                 || !importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)
+                || !importedStagesByType.containsKey(StageType.ACHIEVEMENT_RESOURCE_ANALYSIS)
                 || !importedStagesByType.containsKey(StageType.WORLD)
                 || !importedStagesByType.containsKey(StageType.ACHIEVEMENT_REALISATION)) {
-            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, WORLD, ACHIEVEMENT_REALISATION stages");
+            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, ACHIEVEMENT_RESOURCE_ANALYSIS, WORLD, ACHIEVEMENT_REALISATION stages");
         }
 
         for (QuestStage stage : project.getStages()) {
@@ -761,6 +770,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return switch (stageType) {
             case QUEST_DESCRIPTION -> "Quest Description";
             case QUEST_CONSTRAINTS -> "Quest Constraints";
+            case ACHIEVEMENT_RESOURCE_ANALYSIS -> "Achievement Resource Analysis";
             case WORLD -> "World";
             case ACHIEVEMENT_REALISATION -> "Achievement Realisation";
             case FACTS -> "Facts";
