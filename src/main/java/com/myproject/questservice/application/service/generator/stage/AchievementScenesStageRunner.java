@@ -61,6 +61,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
     private final ProjectRepository projectRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
+    private static final int MAX_CONTEXT_CHARS = 9_000;
 
     @Override
     public StageType type() {
@@ -95,14 +96,14 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             throw new NotFoundException("Way not found in ACHIEVEMENT_REALISATION: " + normalizedWayId);
         }
         String achievementId = wayNode.path("achievement_id").asText("");
+        JsonNode infoFlowNode = findByWayId(informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow"), normalizedWayId);
+        JsonNode knowledgeChainNode = findByWayId(knowledgeChainStage.getCurrentRevision().outputJson().path("knowledge_chains"), normalizedWayId);
+        JsonNode scopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), wayNode);
 
         String userPrompt = """
                 Generate scenes for one way only.
 
                 way_id: %s
-
-                quest_description_json:
-                %s
 
                 constraints_json:
                 %s
@@ -110,19 +111,16 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 achievement_resource_analysis_json:
                 %s
 
-                world_json:
+                scoped_world_json:
                 %s
 
-                achievement_realisation_json:
+                selected_way_json:
                 %s
 
-                achievement_information_flow_json:
+                selected_information_flow_json:
                 %s
 
-                knowledge_chain_json:
-                %s
-
-                way_json:
+                selected_knowledge_chain_json:
                 %s
 
                 Requirements:
@@ -135,14 +133,12 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 - no global endings or unrelated ways
                 """.formatted(
                 normalizedWayId,
-                descriptionStage.getCurrentRevision().outputJson(),
-                constraintsStage.getCurrentRevision().outputJson(),
-                analysisStage.getCurrentRevision().outputJson(),
-                worldStage.getCurrentRevision().outputJson(),
-                realisationStage.getCurrentRevision().outputJson(),
-                informationFlowStage.getCurrentRevision().outputJson(),
-                knowledgeChainStage.getCurrentRevision().outputJson(),
-                wayNode
+                compactJson(constraintsStage.getCurrentRevision().outputJson()),
+                compactJson(analysisStage.getCurrentRevision().outputJson()),
+                compactJson(scopedWorld),
+                compactJson(wayNode),
+                compactJson(infoFlowNode),
+                compactJson(knowledgeChainNode)
         );
 
         JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
@@ -178,6 +174,77 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             }
         }
         return null;
+    }
+
+    private JsonNode findByWayId(JsonNode arrayNode, String wayId) {
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return objectMapper.createObjectNode();
+        }
+        for (JsonNode item : arrayNode) {
+            if (wayId.equalsIgnoreCase(item.path("way_id").asText(""))) {
+                return item;
+            }
+        }
+        return objectMapper.createObjectNode();
+    }
+
+    private JsonNode buildScopedWorld(JsonNode worldJson, JsonNode wayNode) {
+        Set<String> ids = new HashSet<>();
+        JsonNode usesElements = wayNode.path("uses_world_elements");
+        if (usesElements.isArray()) {
+            for (JsonNode item : usesElements) {
+                String id = item.asText("");
+                if (!id.isBlank()) {
+                    ids.add(id);
+                }
+            }
+        }
+
+        ObjectNode scoped = objectMapper.createObjectNode();
+        ArrayNode locations = objectMapper.createArrayNode();
+        ArrayNode organizations = objectMapper.createArrayNode();
+        ArrayNode npcs = objectMapper.createArrayNode();
+
+        JsonNode allLocations = worldJson.path("locations");
+        if (allLocations.isArray()) {
+            for (JsonNode location : allLocations) {
+                if (ids.contains(location.path("id").asText(""))) {
+                    locations.add(location);
+                }
+            }
+        }
+
+        JsonNode allOrganizations = worldJson.path("organizations");
+        if (allOrganizations.isArray()) {
+            for (JsonNode organization : allOrganizations) {
+                if (ids.contains(organization.path("id").asText(""))) {
+                    organizations.add(organization);
+                }
+            }
+        }
+
+        JsonNode allNpcs = worldJson.path("npcs");
+        if (allNpcs.isArray()) {
+            for (JsonNode npc : allNpcs) {
+                if (ids.contains(npc.path("id").asText(""))) {
+                    npcs.add(npc);
+                }
+            }
+        }
+
+        scoped.set("locations", locations);
+        scoped.set("organizations", organizations);
+        scoped.set("npcs", npcs);
+        scoped.set("rules", worldJson.path("rules").isArray() ? worldJson.path("rules") : objectMapper.createArrayNode());
+        return scoped;
+    }
+
+    private String compactJson(JsonNode json) {
+        String raw = json == null ? "{}" : json.toString();
+        if (raw.length() <= MAX_CONTEXT_CHARS) {
+            return raw;
+        }
+        return raw.substring(0, MAX_CONTEXT_CHARS) + "...";
     }
 
     private JsonNode mergeAchievementOutput(JsonNode currentOutput, JsonNode generated, String achievementId, String wayId) {
