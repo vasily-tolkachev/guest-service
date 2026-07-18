@@ -35,6 +35,7 @@ public class QuestProject {
                 StageType.WORLD,
                 StageType.ACHIEVEMENT_REALISATION,
                 StageType.ACHIEVEMENT_INFORMATION_FLOW,
+                StageType.KNOWLEDGE_CHAIN,
                 StageType.ACHIEVEMENT_SCENES
         );
         for (int i = 0; i < orderedTypes.size(); i++) {

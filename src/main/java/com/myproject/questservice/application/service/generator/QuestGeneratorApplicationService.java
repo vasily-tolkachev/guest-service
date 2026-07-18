@@ -366,6 +366,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                     new ImportedStage(objectMapper.createObjectNode(), StageStatus.APPROVED, true)
             );
         }
+        if (!importedStagesByType.containsKey(StageType.KNOWLEDGE_CHAIN)
+                && importedStagesByType.containsKey(StageType.ACHIEVEMENT_INFORMATION_FLOW)) {
+            importedStagesByType.put(
+                    StageType.KNOWLEDGE_CHAIN,
+                    new ImportedStage(objectMapper.createObjectNode(), StageStatus.APPROVED, true)
+            );
+        }
 
         if (!importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
                 || !importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)
@@ -915,6 +922,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             case WORLD -> "World";
             case ACHIEVEMENT_REALISATION -> "Achievement Realisation";
             case ACHIEVEMENT_INFORMATION_FLOW -> "Achievement Information Flow";
+            case KNOWLEDGE_CHAIN -> "Knowledge Chain";
             case ACHIEVEMENT_SCENES -> "Achievement Scenes";
             case FACTS -> "Facts";
             case QUEST_OUTLINE -> "Quest Outline";
