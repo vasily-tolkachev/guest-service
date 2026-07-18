@@ -30,6 +30,7 @@ public class QuestProject {
         List<QuestStage> stages = new ArrayList<>();
         List<StageType> orderedTypes = Arrays.asList(
                 StageType.QUEST_DESCRIPTION,
+                StageType.QUEST_CONSTRAINTS,
                 StageType.WORLD,
                 StageType.NPC,
                 StageType.FACTS,

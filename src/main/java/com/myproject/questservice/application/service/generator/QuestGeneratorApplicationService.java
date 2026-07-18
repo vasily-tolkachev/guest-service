@@ -284,11 +284,20 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             importedStagesByType.put(type, new ImportedStage(outputJson, importedStatus, importedApproved));
         }
 
+        if (!importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)
+                && importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)) {
+            importedStagesByType.put(
+                    StageType.QUEST_CONSTRAINTS,
+                    new ImportedStage(objectMapper.createObjectNode(), StageStatus.APPROVED, true)
+            );
+        }
+
         if (!importedStagesByType.containsKey(StageType.QUEST_DESCRIPTION)
+                || !importedStagesByType.containsKey(StageType.QUEST_CONSTRAINTS)
                 || !importedStagesByType.containsKey(StageType.WORLD)
                 || !importedStagesByType.containsKey(StageType.NPC)
                 || !importedStagesByType.containsKey(StageType.FACTS)) {
-            throw new BadRequestException("Import must include QUEST_DESCRIPTION, WORLD, NPC, FACTS stages");
+            throw new BadRequestException("Import must include QUEST_DESCRIPTION, QUEST_CONSTRAINTS, WORLD, NPC, FACTS stages");
         }
 
         for (QuestStage stage : project.getStages()) {
@@ -726,6 +735,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private String toStageDisplayName(StageType stageType) {
         return switch (stageType) {
             case QUEST_DESCRIPTION -> "Quest Description";
+            case QUEST_CONSTRAINTS -> "Quest Constraints";
             case WORLD -> "World";
             case NPC -> "NPC";
             case FACTS -> "Facts";

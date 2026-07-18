@@ -21,7 +21,7 @@ public class WorldStageRunner implements StageRunner {
             You are a World Design Generator for a quest generation pipeline.
 
             Your task is to create ONLY the world design artifact for the WORLD stage.
-            Input mystery is already approved and should be used as the foundation.
+            Inputs QUEST_DESCRIPTION and QUEST_CONSTRAINTS are already approved and should be used as the foundation.
 
             You are NOT writing quest scenes, dialogues, or flow.
             You are NOT creating NPC biographies.
@@ -67,21 +67,30 @@ public class WorldStageRunner implements StageRunner {
 
         QuestStage mysteryStage = project.findStage(StageType.QUEST_DESCRIPTION)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_DESCRIPTION));
+        QuestStage constraintsStage = project.findStage(StageType.QUEST_CONSTRAINTS)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_CONSTRAINTS));
 
         if (mysteryStage.getStatus() != StageStatus.APPROVED || mysteryStage.getCurrentRevision() == null) {
             throw new ConflictException("WORLD generation requires APPROVED QUEST_DESCRIPTION stage");
         }
+        if (constraintsStage.getStatus() != StageStatus.APPROVED || constraintsStage.getCurrentRevision() == null) {
+            throw new ConflictException("WORLD generation requires APPROVED QUEST_CONSTRAINTS stage");
+        }
 
-        String userPrompt = buildUserPrompt(project, mysteryStage.getCurrentRevision().outputJson());
+        String userPrompt = buildUserPrompt(
+                project,
+                mysteryStage.getCurrentRevision().outputJson(),
+                constraintsStage.getCurrentRevision().outputJson()
+        );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
     }
 
-    private String buildUserPrompt(QuestProject project, JsonNode approvedMysteryJson) {
+    private String buildUserPrompt(QuestProject project, JsonNode approvedMysteryJson, JsonNode approvedConstraintsJson) {
         String style = project.getQuestStyle() == null || project.getQuestStyle().isBlank()
                 ? "classic-adventure"
                 : project.getQuestStyle().trim();
         return """
-                Build WORLD stage artifact from approved mystery.
+                Build WORLD stage artifact from approved QUEST_DESCRIPTION and QUEST_CONSTRAINTS.
 
                 project_name: %s
                 quest_style: %s
@@ -89,12 +98,16 @@ public class WorldStageRunner implements StageRunner {
                 approved_mystery_json:
                 %s
 
+                approved_constraints_json:
+                %s
+
                 Requirements:
                 - generate 3-8 locations with unique ids L01, L02, ...
                 - generate 1-5 organizations with unique ids O01, O02, ...
                 - generate 3-10 world rules as short statements
+                - every generated element must be consistent with approved_constraints_json
                 - do not generate scenes, dialogues, or quest steps
                 - all text in Russian
-                """.formatted(project.getName(), style, approvedMysteryJson.toString());
+                """.formatted(project.getName(), style, approvedMysteryJson.toString(), approvedConstraintsJson.toString());
     }
 }
