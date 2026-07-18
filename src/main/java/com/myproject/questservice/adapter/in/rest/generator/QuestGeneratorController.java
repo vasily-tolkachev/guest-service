@@ -79,6 +79,16 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveScene(id, sceneId);
     }
 
+    @PostMapping("/{id}/stages/ACHIEVEMENT_SCENES/achievements/{achievementId}/generate")
+    public QuestProjectView generateAchievementScene(@PathVariable UUID id, @PathVariable String achievementId) {
+        return questGeneratorUseCase.generateAchievementScene(id, achievementId);
+    }
+
+    @PostMapping("/{id}/stages/ACHIEVEMENT_SCENES/achievements/{achievementId}/approve")
+    public QuestProjectView approveAchievementScene(@PathVariable UUID id, @PathVariable String achievementId) {
+        return questGeneratorUseCase.approveAchievementScene(id, achievementId);
+    }
+
     @GetMapping("/{id}/export-json")
     public Object exportProjectJson(@PathVariable UUID id) {
         return questGeneratorUseCase.exportProjectJson(id);

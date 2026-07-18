@@ -33,7 +33,8 @@ public class QuestProject {
                 StageType.QUEST_CONSTRAINTS,
                 StageType.ACHIEVEMENT_RESOURCE_ANALYSIS,
                 StageType.WORLD,
-                StageType.ACHIEVEMENT_REALISATION
+                StageType.ACHIEVEMENT_REALISATION,
+                StageType.ACHIEVEMENT_SCENES
         );
         for (int i = 0; i < orderedTypes.size(); i++) {
             StageType type = orderedTypes.get(i);

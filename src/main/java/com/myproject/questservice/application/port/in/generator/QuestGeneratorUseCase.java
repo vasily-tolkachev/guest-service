@@ -23,6 +23,8 @@ public interface QuestGeneratorUseCase {
     QuestProjectView approveChapter(UUID projectId, String chapterId);
     QuestProjectView generateScene(UUID projectId, String sceneId);
     QuestProjectView approveScene(UUID projectId, String sceneId);
+    QuestProjectView generateAchievementScene(UUID projectId, String achievementId);
+    QuestProjectView approveAchievementScene(UUID projectId, String achievementId);
 
     Object exportProjectJson(UUID projectId);
 

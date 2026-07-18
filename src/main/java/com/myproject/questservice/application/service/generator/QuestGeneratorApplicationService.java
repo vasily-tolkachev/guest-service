@@ -15,6 +15,7 @@ import com.myproject.questservice.application.service.generator.stage.StageRunne
 import com.myproject.questservice.application.service.generator.stage.StepStageRunner;
 import com.myproject.questservice.application.service.generator.stage.ChapterStageRunner;
 import com.myproject.questservice.application.service.generator.stage.SceneStageRunner;
+import com.myproject.questservice.application.service.generator.stage.AchievementSceneStageRunner;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
 import com.myproject.questservice.domain.generator.StageRevision;
@@ -248,6 +249,62 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         boolean allApproved = areAllChapterScenesApproved(project, updatedOutput);
         scenesStage.setApproved(allApproved);
         scenesStage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateAchievementScene(UUID projectId, String achievementId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
+        if (stage.getStatus() == StageStatus.NOT_STARTED) {
+            stage.setStatus(StageStatus.READY);
+        }
+        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
+            throw new ConflictException("ACHIEVEMENT_SCENES stage is not ready for achievement generation");
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(StageType.ACHIEVEMENT_SCENES)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACHIEVEMENT_SCENES"));
+        if (!(runner instanceof AchievementSceneStageRunner achievementSceneRunner)) {
+            throw new ConflictException("ACHIEVEMENT_SCENES runner does not support achievement generation");
+        }
+
+        StageStatus previousStatus = stage.getStatus();
+        stage.setStatus(StageStatus.GENERATING);
+        JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = achievementSceneRunner.generateAchievement(projectId, achievementId, currentOutput);
+        } catch (RuntimeException ex) {
+            stage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = stage.getCurrentRevision() == null
+                ? 1
+                : stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markAchievementSceneReview(output, achievementId), Instant.now()));
+        stage.setApproved(false);
+        stage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView approveAchievementScene(UUID projectId, String achievementId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("ACHIEVEMENT_SCENES stage has no revision");
+        }
+        JsonNode updatedOutput = markAchievementSceneApproved(stage.getCurrentRevision().outputJson(), achievementId);
+        int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
+        boolean allApproved = areAllAchievementScenesApproved(project, updatedOutput);
+        stage.setApproved(allApproved);
+        stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
         projectRepository.save(project);
         return toView(project);
     }
@@ -729,6 +786,83 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return approvedSceneIds.containsAll(requiredSceneIds);
     }
 
+    private JsonNode markAchievementSceneReview(JsonNode stageOutput, String achievementId) {
+        var root = objectMapper.createObjectNode();
+        var achievements = objectMapper.createArrayNode();
+        JsonNode existing = stageOutput == null ? null : stageOutput.path("achievements");
+        if (existing != null && existing.isArray()) {
+            for (JsonNode achievement : existing) {
+                String id = achievement.path("achievement_id").asText("");
+                var achievementNode = achievement.deepCopy();
+                if (id.equalsIgnoreCase(achievementId)) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("status", StageStatus.REVIEW.name());
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("approved", false);
+                }
+                achievements.add(achievementNode);
+            }
+        }
+        root.set("achievements", achievements);
+        return root;
+    }
+
+    private JsonNode markAchievementSceneApproved(JsonNode stageOutput, String achievementId) {
+        if (stageOutput == null || !stageOutput.path("achievements").isArray()) {
+            throw new ConflictException("No generated achievement scenes to approve");
+        }
+        var root = objectMapper.createObjectNode();
+        var achievements = objectMapper.createArrayNode();
+        boolean found = false;
+        for (JsonNode achievement : stageOutput.path("achievements")) {
+            String id = achievement.path("achievement_id").asText("");
+            var achievementNode = achievement.deepCopy();
+            if (id.equalsIgnoreCase(achievementId)) {
+                found = true;
+                ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("status", StageStatus.APPROVED.name());
+                ((com.fasterxml.jackson.databind.node.ObjectNode) achievementNode).put("approved", true);
+            }
+            achievements.add(achievementNode);
+        }
+        if (!found) {
+            throw new NotFoundException("Generated achievement scene block not found: " + achievementId);
+        }
+        root.set("achievements", achievements);
+        return root;
+    }
+
+    private boolean areAllAchievementScenesApproved(QuestProject project, JsonNode achievementScenesOutput) {
+        QuestStage descriptionStage = getRequiredStage(project, StageType.QUEST_DESCRIPTION);
+        JsonNode achievementsInDescription = descriptionStage.getCurrentRevision() == null
+                ? null
+                : descriptionStage.getCurrentRevision().outputJson().path("achievements");
+        if (achievementsInDescription == null || !achievementsInDescription.isArray() || achievementsInDescription.isEmpty()) {
+            return false;
+        }
+        Set<String> requiredAchievementIds = new HashSet<>();
+        for (JsonNode achievement : achievementsInDescription) {
+            String id = achievement.path("id").asText("").toUpperCase();
+            if (!id.isBlank()) {
+                requiredAchievementIds.add(id);
+            }
+        }
+        if (requiredAchievementIds.isEmpty()) {
+            return false;
+        }
+
+        Set<String> approvedAchievementIds = new HashSet<>();
+        JsonNode generatedAchievements = achievementScenesOutput.path("achievements");
+        if (generatedAchievements.isArray()) {
+            for (JsonNode achievement : generatedAchievements) {
+                if (achievement.path("approved").asBoolean(false)) {
+                    String id = achievement.path("achievement_id").asText("").toUpperCase();
+                    if (!id.isBlank()) {
+                        approvedAchievementIds.add(id);
+                    }
+                }
+            }
+        }
+        return approvedAchievementIds.containsAll(requiredAchievementIds);
+    }
+
     private List<String> readStringArray(JsonNode arrayNode) {
         List<String> result = new ArrayList<>();
         if (arrayNode == null || !arrayNode.isArray()) {
@@ -773,6 +907,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             case ACHIEVEMENT_RESOURCE_ANALYSIS -> "Achievement Resource Analysis";
             case WORLD -> "World";
             case ACHIEVEMENT_REALISATION -> "Achievement Realisation";
+            case ACHIEVEMENT_SCENES -> "Achievement Scenes";
             case FACTS -> "Facts";
             case QUEST_OUTLINE -> "Quest Outline";
             case CHAPTERS -> "Chapters";
