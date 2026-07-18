@@ -32,6 +32,8 @@ public class WorldStageRunner implements StageRunner {
             - No stage is allowed to rewrite or retell data from previous stages.
 
             Keep output concrete and structured stages.
+            
+            If there is no data that fit in the fields because of constraints, leave them empty.
 
             Return JSON with this schema:
             {
