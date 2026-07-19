@@ -95,6 +95,16 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveAchievementScene(id, wayId);
     }
 
+    @PostMapping("/{id}/stages/KNOWLEDGE_CHAIN/ways/{wayId}/generate")
+    public QuestProjectView generateKnowledgeChain(@PathVariable UUID id, @PathVariable String wayId) {
+        return questGeneratorUseCase.generateKnowledgeChain(id, wayId);
+    }
+
+    @PostMapping("/{id}/stages/KNOWLEDGE_CHAIN/ways/{wayId}/approve")
+    public QuestProjectView approveKnowledgeChain(@PathVariable UUID id, @PathVariable String wayId) {
+        return questGeneratorUseCase.approveKnowledgeChain(id, wayId);
+    }
+
     @GetMapping("/{id}/export-json")
     public Object exportProjectJson(@PathVariable UUID id) {
         return questGeneratorUseCase.exportProjectJson(id);

@@ -19,7 +19,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStageRunner {
+public class KnowledgeChainStageRunner implements KnowledgeChainWayStageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are a Knowledge Chain Generator for a quest generation pipeline.
 
@@ -68,72 +68,60 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
 
     @Override
     public JsonNode generate(UUID projectId) {
+        throw new ConflictException("KNOWLEDGE_CHAIN supports only per-way generation");
+    }
+
+    @Override
+    public JsonNode generateKnowledgeChain(UUID projectId, String wayId, JsonNode currentOutput) {
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
-        QuestStage descriptionStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
         QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
-
-        JsonNode informationFlows = informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow");
-        if (!informationFlows.isArray() || informationFlows.isEmpty()) {
-            throw new ConflictException("KNOWLEDGE_CHAIN generation requires non-empty ACHIEVEMENT_INFORMATION_FLOW output");
+        String normalizedWayId = wayId == null ? "" : wayId.trim();
+        if (normalizedWayId.isBlank()) {
+            throw new ConflictException("wayId is required");
+        }
+        JsonNode flowNode = findFlowNode(informationFlowStage.getCurrentRevision().outputJson(), normalizedWayId);
+        if (flowNode == null) {
+            throw new NotFoundException("Flow for way not found: " + normalizedWayId);
+        }
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
+        if (wayNode == null) {
+            throw new NotFoundException("Way not found in ACHIEVEMENT_REALISATION: " + normalizedWayId);
         }
 
-        ArrayNode chains = objectMapper.createArrayNode();
-        for (JsonNode flowNode : informationFlows) {
-            String wayId = flowNode.path("way_id").asText("");
-            if (wayId.isBlank()) {
-                continue;
-            }
+        String userPrompt = """
+                Build KNOWLEDGE_CHAIN for one way only.
 
-            JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), wayId);
-            if (wayNode == null) {
-                continue;
-            }
-            String userPrompt = """
-                    Build KNOWLEDGE_CHAIN for one way only.
+                way_id: %s
 
-                    way_id: %s
+                information_flow_for_way_json:
+                %s
 
-                    quest_description_json:
-                    %s
+                world_json:
+                %s
 
-                    information_flow_for_way_json:
-                    %s
+                way_json:
+                %s
 
-                    world_json:
-                    %s
+                Requirements:
+                - produce exactly one knowledge_chain block
+                - knowledge_chain must contain exactly 3 linked steps (K1 -> K2 -> K3)
+                - each step must describe how new knowledge is obtained
+                - chain should be playable and logically connected
+                - do not turn chain into direct achievement checklist
+                - all text in Russian
+                """.formatted(
+                normalizedWayId,
+                compactJson(flowNode),
+                compactJson(worldStage.getCurrentRevision().outputJson()),
+                compactJson(wayNode)
+        );
 
-                    way_json:
-                    %s
-
-                    Requirements:
-                    - produce exactly one knowledge_chain block
-                    - each chain must have 4-8 linked knowledge steps
-                    - each step must describe how new knowledge is obtained
-                    - chain should be playable and logically connected
-                    - do not turn chain into direct achievement checklist
-                    - all text in Russian
-                    """.formatted(
-                    wayId,
-                    compactJson(descriptionStage.getCurrentRevision().outputJson()),
-                    compactJson(flowNode),
-                    compactJson(worldStage.getCurrentRevision().outputJson()),
-                    compactJson(wayNode)
-            );
-
-            JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
-            JsonNode chainNode = generated.path("knowledge_chain");
-            if (chainNode != null && !chainNode.isMissingNode() && !chainNode.isNull()) {
-                chains.add(chainNode);
-            }
-        }
-
-        ObjectNode result = objectMapper.createObjectNode();
-        result.set("knowledge_chains", chains);
-        return result;
+        JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
+        return mergeKnowledgeChainOutput(currentOutput, generated, normalizedWayId);
     }
 
     @Override
@@ -141,7 +129,6 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
-        QuestStage descriptionStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
         QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
@@ -162,9 +149,6 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
 
                 way_id: %s
 
-                quest_description_json:
-                %s
-
                 information_flow_for_way_json:
                 %s
 
@@ -176,14 +160,13 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
 
                 Requirements:
                 - produce exactly one knowledge_chain block
-                - each chain must have 4-8 linked knowledge steps
+                - knowledge_chain must contain exactly 3 linked steps (K1 -> K2 -> K3)
                 - each step must describe how new knowledge is obtained
                 - chain should be playable and logically connected
                 - do not turn chain into direct achievement checklist
                 - all text in Russian
                 """.formatted(
                 firstFlow.path("way_id").asText(""),
-                compactJson(descriptionStage.getCurrentRevision().outputJson()),
                 compactJson(firstFlow),
                 compactJson(worldStage.getCurrentRevision().outputJson()),
                 compactJson(firstWay)
@@ -220,6 +203,46 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
             }
         }
         return null;
+    }
+
+    private JsonNode findFlowNode(JsonNode informationFlowJson, String wayId) {
+        JsonNode flows = informationFlowJson.path("achievement_information_flow");
+        if (!flows.isArray()) {
+            return null;
+        }
+        for (JsonNode flow : flows) {
+            if (wayId.equalsIgnoreCase(flow.path("way_id").asText(""))) {
+                return flow;
+            }
+        }
+        return null;
+    }
+
+    private JsonNode mergeKnowledgeChainOutput(JsonNode currentOutput, JsonNode generated, String wayId) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode chains = objectMapper.createArrayNode();
+        if (currentOutput != null && currentOutput.path("knowledge_chains").isArray()) {
+            for (JsonNode existing : currentOutput.path("knowledge_chains")) {
+                if (!wayId.equalsIgnoreCase(existing.path("way_id").asText(""))) {
+                    chains.add(existing);
+                }
+            }
+        }
+
+        JsonNode generatedChain = generated.path("knowledge_chain");
+        ObjectNode normalized = objectMapper.createObjectNode();
+        normalized.put("achievement_id", generatedChain.path("achievement_id").asText(""));
+        normalized.put("way_id", wayId);
+        normalized.put("target_achievement", generatedChain.path("target_achievement").asText(""));
+        normalized.set("knowledge_chain", generatedChain.path("knowledge_chain").isArray()
+                ? generatedChain.path("knowledge_chain")
+                : objectMapper.createArrayNode());
+        normalized.put("entry_point", generatedChain.path("entry_point").asText("K1"));
+        normalized.put("final_knowledge", generatedChain.path("final_knowledge").asText(""));
+        chains.add(normalized);
+
+        root.set("knowledge_chains", chains);
+        return root;
     }
 
     private String compactJson(JsonNode json) {

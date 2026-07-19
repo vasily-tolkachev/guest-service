@@ -16,6 +16,7 @@ import com.myproject.questservice.application.service.generator.stage.StepStageR
 import com.myproject.questservice.application.service.generator.stage.ChapterStageRunner;
 import com.myproject.questservice.application.service.generator.stage.SceneStageRunner;
 import com.myproject.questservice.application.service.generator.stage.AchievementSceneStageRunner;
+import com.myproject.questservice.application.service.generator.stage.KnowledgeChainWayStageRunner;
 import com.myproject.questservice.application.service.generator.stage.PromptPreviewStageRunner;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 import com.myproject.questservice.domain.generator.QuestProject;
@@ -79,6 +80,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     @Override
     public QuestProjectView generateStage(UUID projectId, StageType stageType) {
+        if (stageType == StageType.KNOWLEDGE_CHAIN) {
+            throw new ConflictException("KNOWLEDGE_CHAIN supports only per-way generation: /stages/KNOWLEDGE_CHAIN/ways/{wayId}/generate");
+        }
         StageRunner runner = stageRunnerRegistry.find(stageType)
                 .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
         if (runner instanceof StepStageRunner stepRunner) {
@@ -315,6 +319,62 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
         stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
         boolean allApproved = areAllAchievementScenesApproved(project, updatedOutput);
+        stage.setApproved(allApproved);
+        stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateKnowledgeChain(UUID projectId, String wayId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.KNOWLEDGE_CHAIN);
+        if (stage.getStatus() == StageStatus.NOT_STARTED) {
+            stage.setStatus(StageStatus.READY);
+        }
+        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
+            throw new ConflictException("KNOWLEDGE_CHAIN stage is not ready for per-way generation");
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(StageType.KNOWLEDGE_CHAIN)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for KNOWLEDGE_CHAIN"));
+        if (!(runner instanceof KnowledgeChainWayStageRunner knowledgeChainRunner)) {
+            throw new ConflictException("KNOWLEDGE_CHAIN runner does not support per-way generation");
+        }
+
+        StageStatus previousStatus = stage.getStatus();
+        stage.setStatus(StageStatus.GENERATING);
+        JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = knowledgeChainRunner.generateKnowledgeChain(projectId, wayId, currentOutput);
+        } catch (RuntimeException ex) {
+            stage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = stage.getCurrentRevision() == null
+                ? 1
+                : stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markKnowledgeChainReview(output, wayId), Instant.now()));
+        stage.setApproved(false);
+        stage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView approveKnowledgeChain(UUID projectId, String wayId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.KNOWLEDGE_CHAIN);
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("KNOWLEDGE_CHAIN stage has no revision");
+        }
+        JsonNode updatedOutput = markKnowledgeChainApproved(stage.getCurrentRevision().outputJson(), wayId);
+        int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
+        boolean allApproved = areAllKnowledgeChainsApproved(project, updatedOutput);
         stage.setApproved(allApproved);
         stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
         projectRepository.save(project);
@@ -904,6 +964,84 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                     String id = way.path("way_id").asText("").toUpperCase();
                     if (!id.isBlank()) {
                         approvedWayIds.add(id);
+                    }
+                }
+            }
+        }
+        return approvedWayIds.containsAll(requiredWayIds);
+    }
+
+    private JsonNode markKnowledgeChainReview(JsonNode stageOutput, String wayId) {
+        var root = objectMapper.createObjectNode();
+        var chains = objectMapper.createArrayNode();
+        JsonNode existing = stageOutput == null ? null : stageOutput.path("knowledge_chains");
+        if (existing != null && existing.isArray()) {
+            for (JsonNode chain : existing) {
+                String id = chain.path("way_id").asText("");
+                var chainNode = chain.deepCopy();
+                if (id.equalsIgnoreCase(wayId)) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) chainNode).put("status", StageStatus.REVIEW.name());
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) chainNode).put("approved", false);
+                }
+                chains.add(chainNode);
+            }
+        }
+        root.set("knowledge_chains", chains);
+        return root;
+    }
+
+    private JsonNode markKnowledgeChainApproved(JsonNode stageOutput, String wayId) {
+        if (stageOutput == null || !stageOutput.path("knowledge_chains").isArray()) {
+            throw new ConflictException("No generated knowledge chains to approve");
+        }
+        var root = objectMapper.createObjectNode();
+        var chains = objectMapper.createArrayNode();
+        boolean found = false;
+        for (JsonNode chain : stageOutput.path("knowledge_chains")) {
+            String id = chain.path("way_id").asText("");
+            var chainNode = chain.deepCopy();
+            if (id.equalsIgnoreCase(wayId)) {
+                found = true;
+                ((com.fasterxml.jackson.databind.node.ObjectNode) chainNode).put("status", StageStatus.APPROVED.name());
+                ((com.fasterxml.jackson.databind.node.ObjectNode) chainNode).put("approved", true);
+            }
+            chains.add(chainNode);
+        }
+        if (!found) {
+            throw new NotFoundException("Generated knowledge chain block not found: " + wayId);
+        }
+        root.set("knowledge_chains", chains);
+        return root;
+    }
+
+    private boolean areAllKnowledgeChainsApproved(QuestProject project, JsonNode knowledgeChainOutput) {
+        QuestStage informationFlowStage = getRequiredStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
+        JsonNode flows = informationFlowStage.getCurrentRevision() == null
+                ? null
+                : informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow");
+        if (flows == null || !flows.isArray() || flows.isEmpty()) {
+            return false;
+        }
+
+        Set<String> requiredWayIds = new HashSet<>();
+        for (JsonNode flow : flows) {
+            String wayId = flow.path("way_id").asText("").toUpperCase();
+            if (!wayId.isBlank()) {
+                requiredWayIds.add(wayId);
+            }
+        }
+        if (requiredWayIds.isEmpty()) {
+            return false;
+        }
+
+        Set<String> approvedWayIds = new HashSet<>();
+        JsonNode chains = knowledgeChainOutput.path("knowledge_chains");
+        if (chains.isArray()) {
+            for (JsonNode chain : chains) {
+                if (chain.path("approved").asBoolean(false)) {
+                    String wayId = chain.path("way_id").asText("").toUpperCase();
+                    if (!wayId.isBlank()) {
+                        approvedWayIds.add(wayId);
                     }
                 }
             }
