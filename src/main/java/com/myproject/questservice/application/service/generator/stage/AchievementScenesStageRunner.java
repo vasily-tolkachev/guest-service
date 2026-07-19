@@ -36,23 +36,23 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             {
               "achievement_id": "A1",
               "way_id": "W1",
-              "quests": [
+              "scenes": [
                 {
-                  "id": "A1_Q01",
+                  "id": "A1_S01",
                   "title": "",
-                  "situation": "",
-                  "first_action": {
-                    "id": "ACT01",
-                    "text": ""
+                  "world_state": {
+                    "known_facts": [],
+                    "unknowns": [],
+                    "constraints": []
                   },
-                  "choices": [
+                  "available_actions": [
                     {
-                      "id": "CH01",
+                      "id": "ACT01",
                       "text": "",
-                      "consequence": "",
-                      "impact": "high|medium|low"
+                      "intent": "observe|probe|move|craft|risk"
                     }
-                  ]
+                  ],
+                  "next_scene_hooks": []
                 }
               ]
             }
@@ -121,12 +121,13 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 %s
 
                 Requirements:
-                - generate 1-3 short quest entries for this way
-                - style should feel like Space Rangers 2 quest episodes
+                - generate 4-8 short micro-scenes for this way
+                - format must use scenes/world_state/available_actions schema
+                - do NOT include outcome/consequence text for actions in this stage
+                - each scene should expose unknowns and investigation-oriented actions
+                - style should feel like Space Rangers 2 exploration of unknown world
                 - use only world entities from world_json
                 - align scenes with this exact realisation way
-                - take one meaningful first_action and convert it into a choice-driven quest situation
-                - each choice must have a clear consequence and meaningful impact
                 - no global endings or unrelated ways
                 """.formatted(
                 wayId,
@@ -189,12 +190,13 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 %s
 
                 Requirements:
-                - generate 1-3 short quest entries for this way
-                - style should feel like Space Rangers 2 quest episodes
+                - generate 4-8 short micro-scenes for this way
+                - format must use scenes/world_state/available_actions schema
+                - do NOT include outcome/consequence text for actions in this stage
+                - each scene should expose unknowns and investigation-oriented actions
+                - style should feel like Space Rangers 2 exploration of unknown world
                 - use only world entities from world_json
                 - align scenes with this exact realisation way
-                - take one meaningful first_action and convert it into a choice-driven quest situation
-                - each choice must have a clear consequence and meaningful impact
                 - no global endings or unrelated ways
                 """.formatted(
                 normalizedWayId,
@@ -260,12 +262,13 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 %s
 
                 Requirements:
-                - generate 1-3 short quest entries for this way
-                - style should feel like Space Rangers 2 quest episodes
+                - generate 4-8 short micro-scenes for this way
+                - format must use scenes/world_state/available_actions schema
+                - do NOT include outcome/consequence text for actions in this stage
+                - each scene should expose unknowns and investigation-oriented actions
+                - style should feel like Space Rangers 2 exploration of unknown world
                 - use only world entities from world_json
                 - align scenes with this exact realisation way
-                - take one meaningful first_action and convert it into a choice-driven quest situation
-                - each choice must have a clear consequence and meaningful impact
                 - no global endings or unrelated ways
                 """.formatted(
                 normalizedWayId,
@@ -419,7 +422,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         ObjectNode normalized = objectMapper.createObjectNode();
         normalized.put("achievement_id", achievementId);
         normalized.put("way_id", wayId);
-        normalized.set("quests", generated.path("quests").isArray() ? generated.path("quests") : objectMapper.createArrayNode());
+        normalized.set("scenes", generated.path("scenes").isArray() ? generated.path("scenes") : objectMapper.createArrayNode());
         ways.add(normalized);
         seen.add(wayId.toUpperCase());
 

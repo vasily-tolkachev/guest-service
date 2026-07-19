@@ -192,6 +192,16 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public StagePromptPreview previewActionResolutionPrompt(UUID projectId, String wayId, String sceneId, String actionId) {
+        StageRunner runner = stageRunnerRegistry.find(StageType.ACTION_QUESTS)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACTION_QUESTS"));
+        if (!(runner instanceof ActionQuestStageRunner actionQuestRunner)) {
+            throw new ConflictException("ACTION_QUESTS runner does not support action-level preview");
+        }
+        return actionQuestRunner.previewActionResolutionPrompt(projectId, wayId, sceneId, actionId);
+    }
+
+    @Override
     public QuestProjectView generateChapter(UUID projectId, String chapterId) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage chaptersStage = getRequiredStage(project, StageType.CHAPTERS);
@@ -480,6 +490,64 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             throw new ConflictException("ACTION_QUESTS stage has no revision");
         }
         JsonNode updatedOutput = markActionQuestApproved(stage.getCurrentRevision().outputJson(), wayId);
+        int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
+        boolean allApproved = areAllActionQuestsApproved(project, updatedOutput);
+        stage.setApproved(allApproved);
+        stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateActionResolution(UUID projectId, String wayId, String sceneId, String actionId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);
+        if (stage.getStatus() == StageStatus.NOT_STARTED) {
+            if (hasAtLeastOneApprovedAchievementScene(project)) {
+                stage.setStatus(StageStatus.READY);
+            }
+        }
+        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
+            throw new ConflictException("ACTION_QUESTS stage is not ready for action resolution generation");
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(StageType.ACTION_QUESTS)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACTION_QUESTS"));
+        if (!(runner instanceof ActionQuestStageRunner actionQuestRunner)) {
+            throw new ConflictException("ACTION_QUESTS runner does not support action-level generation");
+        }
+
+        StageStatus previousStatus = stage.getStatus();
+        stage.setStatus(StageStatus.GENERATING);
+        JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = actionQuestRunner.generateActionResolution(projectId, wayId, sceneId, actionId, currentOutput);
+        } catch (RuntimeException ex) {
+            stage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = stage.getCurrentRevision() == null
+                ? 1
+                : stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markActionResolutionReview(output, wayId, sceneId, actionId), Instant.now()));
+        stage.setApproved(false);
+        stage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView approveActionResolution(UUID projectId, String wayId, String sceneId, String actionId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("ACTION_QUESTS stage has no revision");
+        }
+        JsonNode updatedOutput = markActionResolutionApproved(stage.getCurrentRevision().outputJson(), wayId, sceneId, actionId);
         int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
         stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
         boolean allApproved = areAllActionQuestsApproved(project, updatedOutput);
@@ -1240,9 +1308,24 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         JsonNode ways = actionQuestsOutput.path("ways");
         if (ways.isArray()) {
             for (JsonNode way : ways) {
+                String wayId = way.path("way_id").asText("").toUpperCase();
+                if (wayId.isBlank()) {
+                    continue;
+                }
                 if (way.path("approved").asBoolean(false)) {
-                    String wayId = way.path("way_id").asText("").toUpperCase();
-                    if (!wayId.isBlank()) {
+                    approvedWayIds.add(wayId);
+                    continue;
+                }
+                JsonNode resolutions = way.path("resolutions");
+                if (resolutions.isArray() && !resolutions.isEmpty()) {
+                    boolean allResolutionsApproved = true;
+                    for (JsonNode resolution : resolutions) {
+                        if (!resolution.path("approved").asBoolean(false)) {
+                            allResolutionsApproved = false;
+                            break;
+                        }
+                    }
+                    if (allResolutionsApproved) {
                         approvedWayIds.add(wayId);
                     }
                 }
@@ -1263,6 +1346,67 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return false;
+    }
+
+    private JsonNode markActionResolutionReview(JsonNode stageOutput, String wayId, String sceneId, String actionId) {
+        var root = objectMapper.createObjectNode();
+        var ways = objectMapper.createArrayNode();
+        JsonNode existingWays = stageOutput == null ? null : stageOutput.path("ways");
+        if (existingWays != null && existingWays.isArray()) {
+            for (JsonNode way : existingWays) {
+                var wayNode = way.deepCopy();
+                if (wayId.equalsIgnoreCase(way.path("way_id").asText("")) && wayNode.path("resolutions").isArray()) {
+                    var resolutions = objectMapper.createArrayNode();
+                    for (JsonNode resolution : wayNode.path("resolutions")) {
+                        var resolutionNode = resolution.deepCopy();
+                        boolean same = sceneId.equalsIgnoreCase(resolution.path("scene_id").asText(""))
+                                && actionId.equalsIgnoreCase(resolution.path("action_id").asText(""));
+                        if (same) {
+                            ((com.fasterxml.jackson.databind.node.ObjectNode) resolutionNode).put("status", StageStatus.REVIEW.name());
+                            ((com.fasterxml.jackson.databind.node.ObjectNode) resolutionNode).put("approved", false);
+                        }
+                        resolutions.add(resolutionNode);
+                    }
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).set("resolutions", resolutions);
+                }
+                ways.add(wayNode);
+            }
+        }
+        root.set("ways", ways);
+        return root;
+    }
+
+    private JsonNode markActionResolutionApproved(JsonNode stageOutput, String wayId, String sceneId, String actionId) {
+        if (stageOutput == null || !stageOutput.path("ways").isArray()) {
+            throw new ConflictException("No generated action quest ways to approve");
+        }
+        var root = objectMapper.createObjectNode();
+        var ways = objectMapper.createArrayNode();
+        boolean found = false;
+        for (JsonNode way : stageOutput.path("ways")) {
+            var wayNode = way.deepCopy();
+            if (wayId.equalsIgnoreCase(way.path("way_id").asText("")) && wayNode.path("resolutions").isArray()) {
+                var resolutions = objectMapper.createArrayNode();
+                for (JsonNode resolution : wayNode.path("resolutions")) {
+                    var resolutionNode = resolution.deepCopy();
+                    boolean same = sceneId.equalsIgnoreCase(resolution.path("scene_id").asText(""))
+                            && actionId.equalsIgnoreCase(resolution.path("action_id").asText(""));
+                    if (same) {
+                        found = true;
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) resolutionNode).put("status", StageStatus.APPROVED.name());
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) resolutionNode).put("approved", true);
+                    }
+                    resolutions.add(resolutionNode);
+                }
+                ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).set("resolutions", resolutions);
+            }
+            ways.add(wayNode);
+        }
+        if (!found) {
+            throw new NotFoundException("Generated action resolution not found: " + wayId + "/" + sceneId + "/" + actionId);
+        }
+        root.set("ways", ways);
+        return root;
     }
 
     private List<String> readStringArray(JsonNode arrayNode) {

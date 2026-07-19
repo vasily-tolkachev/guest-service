@@ -130,6 +130,36 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveActionQuest(id, wayId);
     }
 
+    @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/scenes/{sceneId}/actions/{actionId}/preview")
+    public StagePromptPreview previewActionResolution(
+            @PathVariable UUID id,
+            @PathVariable String wayId,
+            @PathVariable String sceneId,
+            @PathVariable String actionId
+    ) {
+        return questGeneratorUseCase.previewActionResolutionPrompt(id, wayId, sceneId, actionId);
+    }
+
+    @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/scenes/{sceneId}/actions/{actionId}/generate")
+    public QuestProjectView generateActionResolution(
+            @PathVariable UUID id,
+            @PathVariable String wayId,
+            @PathVariable String sceneId,
+            @PathVariable String actionId
+    ) {
+        return questGeneratorUseCase.generateActionResolution(id, wayId, sceneId, actionId);
+    }
+
+    @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/scenes/{sceneId}/actions/{actionId}/approve")
+    public QuestProjectView approveActionResolution(
+            @PathVariable UUID id,
+            @PathVariable String wayId,
+            @PathVariable String sceneId,
+            @PathVariable String actionId
+    ) {
+        return questGeneratorUseCase.approveActionResolution(id, wayId, sceneId, actionId);
+    }
+
     @GetMapping("/{id}/export-json")
     public Object exportProjectJson(@PathVariable UUID id) {
         return questGeneratorUseCase.exportProjectJson(id);

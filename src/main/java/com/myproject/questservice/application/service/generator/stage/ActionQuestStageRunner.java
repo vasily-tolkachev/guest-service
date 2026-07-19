@@ -9,4 +9,8 @@ public interface ActionQuestStageRunner extends StageRunner {
     JsonNode generateActionQuest(UUID projectId, String wayId, JsonNode currentOutput);
 
     StagePromptPreview previewActionQuestPrompt(UUID projectId, String wayId);
+
+    JsonNode generateActionResolution(UUID projectId, String wayId, String sceneId, String actionId, JsonNode currentOutput);
+
+    StagePromptPreview previewActionResolutionPrompt(UUID projectId, String wayId, String sceneId, String actionId);
 }
