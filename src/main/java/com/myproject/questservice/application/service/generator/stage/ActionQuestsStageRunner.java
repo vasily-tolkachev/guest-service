@@ -15,11 +15,17 @@ import com.myproject.questservice.domain.generator.StageType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPreviewStageRunner {
+    private static final String[] INTERPRETATION_MARKERS = {
+            "лучше", "хуже", "оптималь", "пригодн", "идеальн", "правильн", "неправильн",
+            "выгодн", "невыгодн", "эффективн", "неэффективн", "безопасн", "опасн",
+            "шанс", "вероятн", "риск", "рекомендуется", "следует", "нужно"
+    };
     private static final String SYSTEM_PROMPT = """
             You are an Action Resolution Generator for a KR2-style quest pipeline.
 
@@ -32,6 +38,8 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
             - All JSON string values MUST be in Russian.
             - Keep style close to KR2 mission tone: exploration, uncertainty, discovery.
             - Do NOT introduce entities that contradict WORLD and previous approved stages.
+            - revealed_info must contain only observable facts, not interpretation.
+            - Do NOT use "best/worst/optimal/suitable" framing.
 
             Return JSON with this schema:
             {
@@ -180,6 +188,7 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
     public JsonNode generateActionResolution(UUID projectId, String wayId, String sceneId, String actionId, JsonNode currentOutput) {
         StagePromptPreview preview = previewActionResolutionPrompt(projectId, wayId, sceneId, actionId);
         JsonNode generated = aiClient.generate(preview.systemPrompt(), preview.userPrompt());
+        validateResolutionFacts(generated.path("resolution"), wayId, sceneId, actionId);
 
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
@@ -245,6 +254,8 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
                 - reveal concrete new information discovered after action
                 - include world state changes caused by action
                 - include what new actions become available next
+                - keep revealed_info objective: only what player can observe/measure/find
+                - do NOT pre-rank decisions as good/bad/optimal
                 - do not rewrite global quest, resolve only this action
                 - all text in Russian
                 """.formatted(
@@ -415,5 +426,38 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
         ways.add(targetWay);
         root.set("ways", ways);
         return root;
+    }
+
+    private void validateResolutionFacts(JsonNode resolution, String wayId, String sceneId, String actionId) {
+        if (resolution == null || !resolution.isObject()) {
+            throw new ConflictException("ACTION_QUESTS resolution must be an object for " + wayId + "/" + sceneId + "/" + actionId);
+        }
+        validateResolutionArray(resolution.path("revealed_info"), "revealed_info", wayId, sceneId, actionId);
+        validateResolutionArray(resolution.path("world_state_changes"), "world_state_changes", wayId, sceneId, actionId);
+        validateResolutionArray(resolution.path("new_actions_unlocked"), "new_actions_unlocked", wayId, sceneId, actionId);
+        validateResolutionArray(resolution.path("risks_triggered"), "risks_triggered", wayId, sceneId, actionId);
+    }
+
+    private void validateResolutionArray(JsonNode arrayNode, String field, String wayId, String sceneId, String actionId) {
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return;
+        }
+        for (JsonNode item : arrayNode) {
+            String text = item.asText("");
+            if (containsInterpretation(text)) {
+                throw new ConflictException("ACTION_QUESTS " + field + " must be factual for "
+                        + wayId + "/" + sceneId + "/" + actionId + ": " + text);
+            }
+        }
+    }
+
+    private boolean containsInterpretation(String text) {
+        String value = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        for (String marker : INTERPRETATION_MARKERS) {
+            if (value.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

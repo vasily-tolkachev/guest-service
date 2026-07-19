@@ -16,12 +16,22 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
 public class AchievementScenesStageRunner implements AchievementSceneStageRunner, PromptPreviewStageRunner {
+    private static final String[] INTERPRETATION_MARKERS = {
+            "лучше", "хуже", "оптималь", "пригодн", "идеальн", "правильн", "неправильн",
+            "выгодн", "невыгодн", "эффективн", "неэффективн", "безопасн", "опасн",
+            "шанс", "вероятн", "риск", "снижает", "повышает", "рекомендуется"
+    };
     private static final String SYSTEM_PROMPT = """
             You are an Achievement Scene Generator for a KR2-style quest pipeline.
 
@@ -52,6 +62,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                       "intent": "observe|probe|move|craft|risk"
                     }
                   ],
+                  "leads_to_scene_ids": [],
                   "next_scene_hooks": []
                 }
               ]
@@ -123,7 +134,10 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 Requirements:
                 - generate 4-8 short micro-scenes for this way
                 - format must use scenes/world_state/available_actions schema
+                - each scene must include leads_to_scene_ids for non-linear graph progression
                 - do NOT include outcome/consequence text for actions in this stage
+                - do NOT include interpretation labels like "good/bad/optimal/suitable"
+                - write only observable, objective facts in world_state
                 - each scene should expose unknowns and investigation-oriented actions
                 - style should feel like Space Rangers 2 exploration of unknown world
                 - use only world entities from world_json
@@ -192,7 +206,10 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 Requirements:
                 - generate 4-8 short micro-scenes for this way
                 - format must use scenes/world_state/available_actions schema
+                - each scene must include leads_to_scene_ids for non-linear graph progression
                 - do NOT include outcome/consequence text for actions in this stage
+                - do NOT include interpretation labels like "good/bad/optimal/suitable"
+                - write only observable, objective facts in world_state
                 - each scene should expose unknowns and investigation-oriented actions
                 - style should feel like Space Rangers 2 exploration of unknown world
                 - use only world entities from world_json
@@ -264,7 +281,10 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                 Requirements:
                 - generate 4-8 short micro-scenes for this way
                 - format must use scenes/world_state/available_actions schema
+                - each scene must include leads_to_scene_ids for non-linear graph progression
                 - do NOT include outcome/consequence text for actions in this stage
+                - do NOT include interpretation labels like "good/bad/optimal/suitable"
+                - write only observable, objective facts in world_state
                 - each scene should expose unknowns and investigation-oriented actions
                 - style should feel like Space Rangers 2 exploration of unknown world
                 - use only world entities from world_json
@@ -281,6 +301,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         );
 
         JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
+        validateSceneGraph(generated.path("scenes"));
         return mergeAchievementOutput(currentOutput, generated, achievementId, normalizedWayId);
     }
 
@@ -422,12 +443,134 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         ObjectNode normalized = objectMapper.createObjectNode();
         normalized.put("achievement_id", achievementId);
         normalized.put("way_id", wayId);
-        normalized.set("scenes", generated.path("scenes").isArray() ? generated.path("scenes") : objectMapper.createArrayNode());
+        normalized.set("scenes", normalizeScenes(generated.path("scenes")));
         ways.add(normalized);
         seen.add(wayId.toUpperCase());
 
         root.set("ways", ways);
         return root;
+    }
+
+    private ArrayNode normalizeScenes(JsonNode scenesNode) {
+        ArrayNode normalized = objectMapper.createArrayNode();
+        if (!scenesNode.isArray()) {
+            return normalized;
+        }
+
+        Map<String, JsonNode> byId = new HashMap<>();
+        List<String> order = new ArrayList<>();
+        for (JsonNode scene : scenesNode) {
+            String id = scene.path("id").asText("").trim();
+            if (id.isBlank()) {
+                continue;
+            }
+            byId.put(id.toUpperCase(), scene);
+            order.add(id);
+        }
+
+        for (String id : order) {
+            JsonNode source = byId.get(id.toUpperCase());
+            ObjectNode scene = objectMapper.createObjectNode();
+            scene.put("id", id);
+            scene.put("title", source.path("title").asText(""));
+            scene.set("world_state", source.path("world_state").isObject()
+                    ? source.path("world_state")
+                    : objectMapper.createObjectNode());
+            scene.set("available_actions", source.path("available_actions").isArray()
+                    ? source.path("available_actions")
+                    : objectMapper.createArrayNode());
+
+            ArrayNode links = objectMapper.createArrayNode();
+            JsonNode leadsTo = source.path("leads_to_scene_ids");
+            if (leadsTo.isArray()) {
+                for (JsonNode link : leadsTo) {
+                    String target = link.asText("").trim();
+                    if (!target.isBlank() && byId.containsKey(target.toUpperCase())) {
+                        links.add(target);
+                    }
+                }
+            }
+            scene.set("leads_to_scene_ids", links);
+            scene.set("next_scene_hooks", source.path("next_scene_hooks").isArray()
+                    ? source.path("next_scene_hooks")
+                    : objectMapper.createArrayNode());
+            normalized.add(scene);
+        }
+        return normalized;
+    }
+
+    private void validateSceneGraph(JsonNode scenesNode) {
+        if (!scenesNode.isArray() || scenesNode.isEmpty()) {
+            throw new ConflictException("ACHIEVEMENT_SCENES generation produced empty scenes");
+        }
+        Set<String> ids = new HashSet<>();
+        for (JsonNode scene : scenesNode) {
+            String id = scene.path("id").asText("").trim();
+            if (id.isBlank()) {
+                throw new ConflictException("ACHIEVEMENT_SCENES scene id is required");
+            }
+            ids.add(id.toUpperCase());
+            validateWorldStateFacts(scene.path("world_state"), id);
+            validateActions(scene.path("available_actions"), id);
+        }
+        for (JsonNode scene : scenesNode) {
+            JsonNode links = scene.path("leads_to_scene_ids");
+            if (!links.isArray()) {
+                continue;
+            }
+            for (JsonNode link : links) {
+                String target = link.asText("").trim();
+                if (target.isBlank()) {
+                    continue;
+                }
+                if (!ids.contains(target.toUpperCase())) {
+                    throw new ConflictException("ACHIEVEMENT_SCENES has invalid graph link to unknown scene: " + target);
+                }
+            }
+        }
+    }
+
+    private void validateWorldStateFacts(JsonNode worldState, String sceneId) {
+        if (worldState == null || !worldState.isObject()) {
+            return;
+        }
+        validateFactArray(worldState.path("known_facts"), "known_facts", sceneId);
+        validateFactArray(worldState.path("unknowns"), "unknowns", sceneId);
+        validateFactArray(worldState.path("constraints"), "constraints", sceneId);
+    }
+
+    private void validateActions(JsonNode actions, String sceneId) {
+        if (actions == null || !actions.isArray()) {
+            return;
+        }
+        for (JsonNode action : actions) {
+            String text = action.path("text").asText("");
+            if (containsInterpretation(text)) {
+                throw new ConflictException("ACHIEVEMENT_SCENES action text must be objective in scene " + sceneId + ": " + text);
+            }
+        }
+    }
+
+    private void validateFactArray(JsonNode arrayNode, String fieldName, String sceneId) {
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return;
+        }
+        for (JsonNode item : arrayNode) {
+            String text = item.asText("");
+            if (containsInterpretation(text)) {
+                throw new ConflictException("ACHIEVEMENT_SCENES " + fieldName + " must contain observable facts only in scene " + sceneId + ": " + text);
+            }
+        }
+    }
+
+    private boolean containsInterpretation(String text) {
+        String value = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        for (String marker : INTERPRETATION_MARKERS) {
+            if (value.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private JsonNode firstWayNode(JsonNode realisationJson) {

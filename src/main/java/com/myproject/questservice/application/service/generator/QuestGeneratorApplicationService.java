@@ -443,60 +443,12 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     @Override
     public QuestProjectView generateActionQuest(UUID projectId, String wayId) {
-        QuestProject project = getRequiredProject(projectId);
-        QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);
-        if (stage.getStatus() == StageStatus.NOT_STARTED) {
-            if (hasAtLeastOneApprovedAchievementScene(project)) {
-                stage.setStatus(StageStatus.READY);
-            }
-        }
-        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
-            throw new ConflictException("ACTION_QUESTS stage is not ready for per-way generation");
-        }
-
-        StageRunner runner = stageRunnerRegistry.find(StageType.ACTION_QUESTS)
-                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACTION_QUESTS"));
-        if (!(runner instanceof ActionQuestStageRunner actionQuestRunner)) {
-            throw new ConflictException("ACTION_QUESTS runner does not support per-way generation");
-        }
-
-        StageStatus previousStatus = stage.getStatus();
-        stage.setStatus(StageStatus.GENERATING);
-        JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
-        JsonNode output;
-        try {
-            output = actionQuestRunner.generateActionQuest(projectId, wayId, currentOutput);
-        } catch (RuntimeException ex) {
-            stage.setStatus(previousStatus);
-            projectRepository.save(project);
-            throw ex;
-        }
-
-        int nextRevisionNumber = stage.getCurrentRevision() == null
-                ? 1
-                : stage.getCurrentRevision().revisionNumber() + 1;
-        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markActionQuestReview(output, wayId), Instant.now()));
-        stage.setApproved(false);
-        stage.setStatus(StageStatus.REVIEW);
-        projectRepository.save(project);
-        return toView(project);
+        throw new ConflictException("ACTION_QUESTS way-level generation is deprecated. Use action-level endpoint: /stages/ACTION_QUESTS/ways/{wayId}/scenes/{sceneId}/actions/{actionId}/generate");
     }
 
     @Override
     public QuestProjectView approveActionQuest(UUID projectId, String wayId) {
-        QuestProject project = getRequiredProject(projectId);
-        QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);
-        if (stage.getCurrentRevision() == null) {
-            throw new ConflictException("ACTION_QUESTS stage has no revision");
-        }
-        JsonNode updatedOutput = markActionQuestApproved(stage.getCurrentRevision().outputJson(), wayId);
-        int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
-        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
-        boolean allApproved = areAllActionQuestsApproved(project, updatedOutput);
-        stage.setApproved(allApproved);
-        stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
-        projectRepository.save(project);
-        return toView(project);
+        throw new ConflictException("ACTION_QUESTS way-level approval is deprecated. Approve specific action resolutions.");
     }
 
     @Override
@@ -547,7 +499,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (stage.getCurrentRevision() == null) {
             throw new ConflictException("ACTION_QUESTS stage has no revision");
         }
-        JsonNode updatedOutput = markActionResolutionApproved(stage.getCurrentRevision().outputJson(), wayId, sceneId, actionId);
+        JsonNode updatedOutput = markActionResolutionApproved(project, stage.getCurrentRevision().outputJson(), wayId, sceneId, actionId);
         int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
         stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
         boolean allApproved = areAllActionQuestsApproved(project, updatedOutput);
@@ -1283,28 +1235,15 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     private boolean areAllActionQuestsApproved(QuestProject project, JsonNode actionQuestsOutput) {
-        QuestStage scenesStage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
-        JsonNode generatedWays = scenesStage.getCurrentRevision() == null
-                ? null
-                : scenesStage.getCurrentRevision().outputJson().path("ways");
-        if (generatedWays == null || !generatedWays.isArray() || generatedWays.isEmpty()) {
+        JsonNode requiredActionsByWay = requiredActionKeysByWay(project);
+        if (requiredActionsByWay.isEmpty()) {
             return false;
         }
 
         Set<String> requiredWayIds = new HashSet<>();
-        for (JsonNode way : generatedWays) {
-            if (way.path("approved").asBoolean(false)) {
-                String wayId = way.path("way_id").asText("").toUpperCase();
-                if (!wayId.isBlank()) {
-                    requiredWayIds.add(wayId);
-                }
-            }
-        }
-        if (requiredWayIds.isEmpty()) {
-            return false;
-        }
+        requiredActionsByWay.fieldNames().forEachRemaining(requiredWayIds::add);
 
-        Set<String> approvedWayIds = new HashSet<>();
+        Set<String> fullyApprovedWays = new HashSet<>();
         JsonNode ways = actionQuestsOutput.path("ways");
         if (ways.isArray()) {
             for (JsonNode way : ways) {
@@ -1312,26 +1251,39 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 if (wayId.isBlank()) {
                     continue;
                 }
-                if (way.path("approved").asBoolean(false)) {
-                    approvedWayIds.add(wayId);
-                    continue;
-                }
-                JsonNode resolutions = way.path("resolutions");
-                if (resolutions.isArray() && !resolutions.isEmpty()) {
-                    boolean allResolutionsApproved = true;
-                    for (JsonNode resolution : resolutions) {
-                        if (!resolution.path("approved").asBoolean(false)) {
-                            allResolutionsApproved = false;
-                            break;
+                Set<String> requiredActionKeys = new HashSet<>();
+                JsonNode requiredArray = requiredActionsByWay.path(wayId);
+                if (requiredArray.isArray()) {
+                    for (JsonNode key : requiredArray) {
+                        String value = key.asText("").toUpperCase();
+                        if (!value.isBlank()) {
+                            requiredActionKeys.add(value);
                         }
                     }
-                    if (allResolutionsApproved) {
-                        approvedWayIds.add(wayId);
+                }
+                if (requiredActionKeys.isEmpty()) {
+                    continue;
+                }
+
+                Set<String> approvedActionKeys = new HashSet<>();
+                JsonNode resolutions = way.path("resolutions");
+                if (resolutions.isArray()) {
+                    for (JsonNode resolution : resolutions) {
+                        if (!resolution.path("approved").asBoolean(false)) {
+                            continue;
+                        }
+                        String key = resolution.path("scene_id").asText("").toUpperCase() + "::" + resolution.path("action_id").asText("").toUpperCase();
+                        if (!key.equals("::")) {
+                            approvedActionKeys.add(key);
+                        }
                     }
+                }
+                if (approvedActionKeys.containsAll(requiredActionKeys)) {
+                    fullyApprovedWays.add(wayId);
                 }
             }
         }
-        return approvedWayIds.containsAll(requiredWayIds);
+        return fullyApprovedWays.containsAll(requiredWayIds);
     }
 
     private boolean hasAtLeastOneApprovedAchievementScene(QuestProject project) {
@@ -1376,7 +1328,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return root;
     }
 
-    private JsonNode markActionResolutionApproved(JsonNode stageOutput, String wayId, String sceneId, String actionId) {
+    private JsonNode markActionResolutionApproved(QuestProject project, JsonNode stageOutput, String wayId, String sceneId, String actionId) {
         if (stageOutput == null || !stageOutput.path("ways").isArray()) {
             throw new ConflictException("No generated action quest ways to approve");
         }
@@ -1405,7 +1357,83 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (!found) {
             throw new NotFoundException("Generated action resolution not found: " + wayId + "/" + sceneId + "/" + actionId);
         }
+
+        JsonNode requiredActionsByWay = requiredActionKeysByWay(project);
+        for (JsonNode way : ways) {
+            if (!(way instanceof com.fasterxml.jackson.databind.node.ObjectNode wayNode)) {
+                continue;
+            }
+            String candidateWayId = wayNode.path("way_id").asText("").toUpperCase();
+            if (candidateWayId.isBlank()) {
+                continue;
+            }
+            Set<String> required = new HashSet<>();
+            JsonNode requiredArray = requiredActionsByWay.path(candidateWayId);
+            if (requiredArray.isArray()) {
+                for (JsonNode key : requiredArray) {
+                    String value = key.asText("").toUpperCase();
+                    if (!value.isBlank()) {
+                        required.add(value);
+                    }
+                }
+            }
+            Set<String> approved = new HashSet<>();
+            JsonNode resolutions = wayNode.path("resolutions");
+            if (resolutions.isArray()) {
+                for (JsonNode resolution : resolutions) {
+                    if (!resolution.path("approved").asBoolean(false)) {
+                        continue;
+                    }
+                    String key = resolution.path("scene_id").asText("").toUpperCase() + "::" + resolution.path("action_id").asText("").toUpperCase();
+                    if (!key.equals("::")) {
+                        approved.add(key);
+                    }
+                }
+            }
+            boolean wayApproved = !required.isEmpty() && approved.containsAll(required);
+            wayNode.put("approved", wayApproved);
+            wayNode.put("status", wayApproved ? StageStatus.APPROVED.name() : StageStatus.REVIEW.name());
+        }
         root.set("ways", ways);
+        return root;
+    }
+
+    private JsonNode requiredActionKeysByWay(QuestProject project) {
+        var root = objectMapper.createObjectNode();
+        QuestStage scenesStage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
+        JsonNode ways = scenesStage.getCurrentRevision() == null ? null : scenesStage.getCurrentRevision().outputJson().path("ways");
+        if (ways == null || !ways.isArray()) {
+            return root;
+        }
+        for (JsonNode way : ways) {
+            if (!way.path("approved").asBoolean(false)) {
+                continue;
+            }
+            String wayId = way.path("way_id").asText("").toUpperCase();
+            if (wayId.isBlank()) {
+                continue;
+            }
+            var required = objectMapper.createArrayNode();
+            JsonNode scenes = way.path("scenes");
+            if (scenes.isArray()) {
+                for (JsonNode scene : scenes) {
+                    String sceneId = scene.path("id").asText("").toUpperCase();
+                    JsonNode actions = scene.path("available_actions");
+                    if (sceneId.isBlank() || !actions.isArray()) {
+                        continue;
+                    }
+                    for (JsonNode action : actions) {
+                        String actionId = action.path("id").asText("").toUpperCase();
+                        if (!actionId.isBlank()) {
+                            required.add(sceneId + "::" + actionId);
+                        }
+                    }
+                }
+            }
+            if (!required.isEmpty()) {
+                root.set(wayId, required);
+            }
+        }
         return root;
     }
 
