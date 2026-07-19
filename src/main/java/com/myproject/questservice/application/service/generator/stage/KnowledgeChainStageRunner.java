@@ -15,8 +15,6 @@ import com.myproject.questservice.domain.generator.StageType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -94,8 +92,6 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
             if (wayNode == null) {
                 continue;
             }
-            JsonNode scopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), wayNode);
-
             String userPrompt = """
                     Build KNOWLEDGE_CHAIN for one way only.
 
@@ -107,7 +103,7 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
                     information_flow_for_way_json:
                     %s
 
-                    scoped_world_for_way_json:
+                    world_json:
                     %s
 
                     way_json:
@@ -124,7 +120,7 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
                     wayId,
                     compactJson(descriptionStage.getCurrentRevision().outputJson()),
                     compactJson(flowNode),
-                    compactJson(scopedWorld),
+                    compactJson(worldStage.getCurrentRevision().outputJson()),
                     compactJson(wayNode)
             );
 
@@ -153,15 +149,11 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
         JsonNode informationFlows = informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow");
         JsonNode firstFlow = objectMapper.createObjectNode();
         JsonNode firstWay = objectMapper.createObjectNode();
-        JsonNode firstScopedWorld = objectMapper.createObjectNode();
         if (informationFlows.isArray() && !informationFlows.isEmpty()) {
             firstFlow = informationFlows.get(0);
             String wayId = firstFlow.path("way_id").asText("");
             if (!wayId.isBlank()) {
                 firstWay = findWay(realisationStage.getCurrentRevision().outputJson(), wayId);
-                if (firstWay != null) {
-                    firstScopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), firstWay);
-                }
             }
         }
 
@@ -176,7 +168,7 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
                 information_flow_for_way_json:
                 %s
 
-                scoped_world_for_way_json:
+                world_json:
                 %s
 
                 way_json:
@@ -193,7 +185,7 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
                 firstFlow.path("way_id").asText(""),
                 compactJson(descriptionStage.getCurrentRevision().outputJson()),
                 compactJson(firstFlow),
-                compactJson(firstScopedWorld),
+                compactJson(worldStage.getCurrentRevision().outputJson()),
                 compactJson(firstWay)
         );
         return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
@@ -228,57 +220,6 @@ public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStag
             }
         }
         return null;
-    }
-
-    private JsonNode buildScopedWorld(JsonNode worldJson, JsonNode wayNode) {
-        Set<String> ids = new HashSet<>();
-        JsonNode usesElements = wayNode.path("uses_world_elements");
-        if (usesElements.isArray()) {
-            for (JsonNode item : usesElements) {
-                String id = item.asText("");
-                if (!id.isBlank()) {
-                    ids.add(id);
-                }
-            }
-        }
-
-        ObjectNode scoped = objectMapper.createObjectNode();
-        ArrayNode locations = objectMapper.createArrayNode();
-        ArrayNode organizations = objectMapper.createArrayNode();
-        ArrayNode npcs = objectMapper.createArrayNode();
-
-        JsonNode allLocations = worldJson.path("locations");
-        if (allLocations.isArray()) {
-            for (JsonNode location : allLocations) {
-                if (ids.contains(location.path("id").asText(""))) {
-                    locations.add(location);
-                }
-            }
-        }
-
-        JsonNode allOrganizations = worldJson.path("organizations");
-        if (allOrganizations.isArray()) {
-            for (JsonNode organization : allOrganizations) {
-                if (ids.contains(organization.path("id").asText(""))) {
-                    organizations.add(organization);
-                }
-            }
-        }
-
-        JsonNode allNpcs = worldJson.path("npcs");
-        if (allNpcs.isArray()) {
-            for (JsonNode npc : allNpcs) {
-                if (ids.contains(npc.path("id").asText(""))) {
-                    npcs.add(npc);
-                }
-            }
-        }
-
-        scoped.set("locations", locations);
-        scoped.set("organizations", organizations);
-        scoped.set("npcs", npcs);
-        scoped.set("rules", worldJson.path("rules").isArray() ? worldJson.path("rules") : objectMapper.createArrayNode());
-        return scoped;
     }
 
     private String compactJson(JsonNode json) {
