@@ -7,4 +7,6 @@ import java.util.UUID;
 public interface KnowledgeChainWayStageRunner extends StageRunner {
 
     JsonNode generateKnowledgeChain(UUID projectId, String wayId, JsonNode currentOutput);
+
+    StagePromptPreview previewKnowledgeChainPrompt(UUID projectId, String wayId);
 }

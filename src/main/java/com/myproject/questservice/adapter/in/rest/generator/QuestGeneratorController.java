@@ -90,6 +90,11 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.generateAchievementScene(id, wayId);
     }
 
+    @PostMapping("/{id}/stages/ACHIEVEMENT_SCENES/ways/{wayId}/preview")
+    public StagePromptPreview previewAchievementScene(@PathVariable UUID id, @PathVariable String wayId) {
+        return questGeneratorUseCase.previewAchievementScenePrompt(id, wayId);
+    }
+
     @PostMapping("/{id}/stages/ACHIEVEMENT_SCENES/ways/{wayId}/approve")
     public QuestProjectView approveAchievementScene(@PathVariable UUID id, @PathVariable String wayId) {
         return questGeneratorUseCase.approveAchievementScene(id, wayId);
@@ -100,6 +105,11 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.generateKnowledgeChain(id, wayId);
     }
 
+    @PostMapping("/{id}/stages/KNOWLEDGE_CHAIN/ways/{wayId}/preview")
+    public StagePromptPreview previewKnowledgeChain(@PathVariable UUID id, @PathVariable String wayId) {
+        return questGeneratorUseCase.previewKnowledgeChainPrompt(id, wayId);
+    }
+
     @PostMapping("/{id}/stages/KNOWLEDGE_CHAIN/ways/{wayId}/approve")
     public QuestProjectView approveKnowledgeChain(@PathVariable UUID id, @PathVariable String wayId) {
         return questGeneratorUseCase.approveKnowledgeChain(id, wayId);
@@ -108,6 +118,11 @@ public class QuestGeneratorController {
     @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/generate")
     public QuestProjectView generateActionQuest(@PathVariable UUID id, @PathVariable String wayId) {
         return questGeneratorUseCase.generateActionQuest(id, wayId);
+    }
+
+    @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/preview")
+    public StagePromptPreview previewActionQuest(@PathVariable UUID id, @PathVariable String wayId) {
+        return questGeneratorUseCase.previewActionQuestPrompt(id, wayId);
     }
 
     @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/approve")

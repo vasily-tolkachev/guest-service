@@ -173,6 +173,58 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
         return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
+    @Override
+    public StagePromptPreview previewActionQuestPrompt(UUID projectId, String wayId) {
+        if (wayId == null || wayId.isBlank()) {
+            throw new ConflictException("wayId is required");
+        }
+        String normalizedWayId = wayId.trim();
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+        QuestStage scenesStage = requiredStageWithRevision(project, StageType.ACHIEVEMENT_SCENES);
+
+        JsonNode waySceneNode = findByWayId(scenesStage.getCurrentRevision().outputJson().path("ways"), normalizedWayId);
+        if (waySceneNode == null) {
+            throw new NotFoundException("ACHIEVEMENT_SCENES way not found: " + normalizedWayId);
+        }
+        if (!waySceneNode.path("approved").asBoolean(false)) {
+            throw new ConflictException("ACHIEVEMENT_SCENES way is not approved: " + normalizedWayId);
+        }
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
+
+        String userPrompt = """
+                Build ACTION_QUESTS for one way only.
+
+                way_id: %s
+
+                world_json:
+                %s
+
+                selected_realisation_way_json:
+                %s
+
+                selected_achievement_scenes_way_json:
+                %s
+
+                Requirements:
+                - generate mini-quests only for actions in selected_achievement_scenes_way_json
+                - each mini-quest must include a concrete situation and 2-4 meaningful choices
+                - each choice must have clear consequence and risk level
+                - keep KR2 quest tone and pacing
+                - no dialogue screenplay format
+                - all text in Russian
+                """.formatted(
+                normalizedWayId,
+                worldStage.getCurrentRevision().outputJson(),
+                wayNode == null ? "{}" : wayNode.toString(),
+                waySceneNode
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
+    }
+
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
         QuestStage stage = project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));

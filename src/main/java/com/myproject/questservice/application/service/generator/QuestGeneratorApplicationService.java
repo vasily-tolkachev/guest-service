@@ -162,6 +162,36 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public StagePromptPreview previewKnowledgeChainPrompt(UUID projectId, String wayId) {
+        StageRunner runner = stageRunnerRegistry.find(StageType.KNOWLEDGE_CHAIN)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for KNOWLEDGE_CHAIN"));
+        if (!(runner instanceof KnowledgeChainWayStageRunner knowledgeChainRunner)) {
+            throw new ConflictException("KNOWLEDGE_CHAIN runner does not support per-way preview");
+        }
+        return knowledgeChainRunner.previewKnowledgeChainPrompt(projectId, wayId);
+    }
+
+    @Override
+    public StagePromptPreview previewAchievementScenePrompt(UUID projectId, String wayId) {
+        StageRunner runner = stageRunnerRegistry.find(StageType.ACHIEVEMENT_SCENES)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACHIEVEMENT_SCENES"));
+        if (!(runner instanceof AchievementSceneStageRunner achievementSceneRunner)) {
+            throw new ConflictException("ACHIEVEMENT_SCENES runner does not support per-way preview");
+        }
+        return achievementSceneRunner.previewAchievementPrompt(projectId, wayId);
+    }
+
+    @Override
+    public StagePromptPreview previewActionQuestPrompt(UUID projectId, String wayId) {
+        StageRunner runner = stageRunnerRegistry.find(StageType.ACTION_QUESTS)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACTION_QUESTS"));
+        if (!(runner instanceof ActionQuestStageRunner actionQuestRunner)) {
+            throw new ConflictException("ACTION_QUESTS runner does not support per-way preview");
+        }
+        return actionQuestRunner.previewActionQuestPrompt(projectId, wayId);
+    }
+
+    @Override
     public QuestProjectView generateChapter(UUID projectId, String chapterId) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage chaptersStage = getRequiredStage(project, StageType.CHAPTERS);

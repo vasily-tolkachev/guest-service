@@ -141,6 +141,74 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
     }
 
     @Override
+    public StagePromptPreview previewAchievementPrompt(UUID projectId, String wayId) {
+        if (wayId == null || wayId.isBlank()) {
+            throw new ConflictException("wayId is required");
+        }
+        String normalizedWayId = wayId.trim();
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage constraintsStage = requiredApprovedStage(project, StageType.QUEST_CONSTRAINTS);
+        QuestStage analysisStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_RESOURCE_ANALYSIS);
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+        QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
+        QuestStage knowledgeChainStage = requiredStageWithRevision(project, StageType.KNOWLEDGE_CHAIN);
+
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
+        if (wayNode == null) {
+            throw new NotFoundException("Way not found in ACHIEVEMENT_REALISATION: " + normalizedWayId);
+        }
+        JsonNode infoFlowNode = findByWayId(informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow"), normalizedWayId);
+        JsonNode knowledgeChainNode = findByWayId(knowledgeChainStage.getCurrentRevision().outputJson().path("knowledge_chains"), normalizedWayId);
+        ensureKnowledgeChainWayApproved(knowledgeChainNode, normalizedWayId);
+        JsonNode scopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), wayNode);
+
+        String userPrompt = """
+                Generate scenes for one way only.
+
+                way_id: %s
+
+                constraints_json:
+                %s
+
+                achievement_resource_analysis_json:
+                %s
+
+                scoped_world_json:
+                %s
+
+                selected_way_json:
+                %s
+
+                selected_information_flow_json:
+                %s
+
+                selected_knowledge_chain_json:
+                %s
+
+                Requirements:
+                - generate 1-3 short quest entries for this way
+                - style should feel like Space Rangers 2 quest episodes
+                - use only world entities from world_json
+                - align scenes with this exact realisation way
+                - take one meaningful first_action and convert it into a choice-driven quest situation
+                - each choice must have a clear consequence and meaningful impact
+                - no global endings or unrelated ways
+                """.formatted(
+                normalizedWayId,
+                compactJson(constraintsStage.getCurrentRevision().outputJson()),
+                compactJson(analysisStage.getCurrentRevision().outputJson()),
+                compactJson(scopedWorld),
+                compactJson(wayNode),
+                compactJson(infoFlowNode),
+                compactJson(knowledgeChainNode)
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
     public JsonNode generateAchievement(UUID projectId, String wayId, JsonNode currentOutput) {
         if (wayId == null || wayId.isBlank()) {
             throw new ConflictException("wayId is required");

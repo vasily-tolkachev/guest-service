@@ -174,6 +174,55 @@ public class KnowledgeChainStageRunner implements KnowledgeChainWayStageRunner, 
         return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
+    @Override
+    public StagePromptPreview previewKnowledgeChainPrompt(UUID projectId, String wayId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+        QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+        String normalizedWayId = wayId == null ? "" : wayId.trim();
+        if (normalizedWayId.isBlank()) {
+            throw new ConflictException("wayId is required");
+        }
+        JsonNode flowNode = findFlowNode(informationFlowStage.getCurrentRevision().outputJson(), normalizedWayId);
+        if (flowNode == null) {
+            throw new NotFoundException("Flow for way not found: " + normalizedWayId);
+        }
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
+        if (wayNode == null) {
+            throw new NotFoundException("Way not found in ACHIEVEMENT_REALISATION: " + normalizedWayId);
+        }
+        String userPrompt = """
+                Build KNOWLEDGE_CHAIN for one way only.
+
+                way_id: %s
+
+                information_flow_for_way_json:
+                %s
+
+                world_json:
+                %s
+
+                way_json:
+                %s
+
+                Requirements:
+                - produce exactly one knowledge_chain block
+                - knowledge_chain must contain exactly 3 linked steps (K1 -> K2 -> K3)
+                - each step must describe how new knowledge is obtained
+                - chain should be playable and logically connected
+                - do not turn chain into direct achievement checklist
+                - all text in Russian
+                """.formatted(
+                normalizedWayId,
+                compactJson(flowNode),
+                compactJson(worldStage.getCurrentRevision().outputJson()),
+                compactJson(wayNode)
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
+    }
+
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
         QuestStage stage = project.findStage(type)
                 .orElseThrow(() -> new NotFoundException("Stage not found: " + type));

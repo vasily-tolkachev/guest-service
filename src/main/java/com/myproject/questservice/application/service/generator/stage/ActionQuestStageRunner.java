@@ -7,4 +7,6 @@ import java.util.UUID;
 public interface ActionQuestStageRunner extends StageRunner {
 
     JsonNode generateActionQuest(UUID projectId, String wayId, JsonNode currentOutput);
+
+    StagePromptPreview previewActionQuestPrompt(UUID projectId, String wayId);
 }

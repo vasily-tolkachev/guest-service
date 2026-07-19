@@ -7,4 +7,6 @@ import java.util.UUID;
 public interface AchievementSceneStageRunner extends StageRunner {
 
     JsonNode generateAchievement(UUID projectId, String wayId, JsonNode currentOutput);
+
+    StagePromptPreview previewAchievementPrompt(UUID projectId, String wayId);
 }
