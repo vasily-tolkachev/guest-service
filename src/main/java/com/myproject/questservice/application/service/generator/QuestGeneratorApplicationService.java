@@ -17,6 +17,7 @@ import com.myproject.questservice.application.service.generator.stage.ChapterSta
 import com.myproject.questservice.application.service.generator.stage.SceneStageRunner;
 import com.myproject.questservice.application.service.generator.stage.AchievementSceneStageRunner;
 import com.myproject.questservice.application.service.generator.stage.KnowledgeChainWayStageRunner;
+import com.myproject.questservice.application.service.generator.stage.ActionQuestStageRunner;
 import com.myproject.questservice.application.service.generator.stage.PromptPreviewStageRunner;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 import com.myproject.questservice.domain.generator.QuestProject;
@@ -82,6 +83,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     public QuestProjectView generateStage(UUID projectId, StageType stageType) {
         if (stageType == StageType.KNOWLEDGE_CHAIN) {
             throw new ConflictException("KNOWLEDGE_CHAIN supports only per-way generation: /stages/KNOWLEDGE_CHAIN/ways/{wayId}/generate");
+        }
+        if (stageType == StageType.ACTION_QUESTS) {
+            throw new ConflictException("ACTION_QUESTS supports only per-way generation: /stages/ACTION_QUESTS/ways/{wayId}/generate");
         }
         StageRunner runner = stageRunnerRegistry.find(stageType)
                 .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
@@ -323,6 +327,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         boolean allApproved = areAllAchievementScenesApproved(project, updatedOutput);
         stage.setApproved(allApproved);
         stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
+
+        project.nextStage(StageType.ACHIEVEMENT_SCENES).ifPresent(nextStage -> {
+            if (nextStage.getType() == StageType.ACTION_QUESTS && nextStage.getStatus() == StageStatus.NOT_STARTED) {
+                nextStage.setStatus(StageStatus.READY);
+            }
+        });
+
         projectRepository.save(project);
         return toView(project);
     }
@@ -386,6 +397,64 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         });
 
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateActionQuest(UUID projectId, String wayId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);
+        if (stage.getStatus() == StageStatus.NOT_STARTED) {
+            if (hasAtLeastOneApprovedAchievementScene(project)) {
+                stage.setStatus(StageStatus.READY);
+            }
+        }
+        if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
+            throw new ConflictException("ACTION_QUESTS stage is not ready for per-way generation");
+        }
+
+        StageRunner runner = stageRunnerRegistry.find(StageType.ACTION_QUESTS)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for ACTION_QUESTS"));
+        if (!(runner instanceof ActionQuestStageRunner actionQuestRunner)) {
+            throw new ConflictException("ACTION_QUESTS runner does not support per-way generation");
+        }
+
+        StageStatus previousStatus = stage.getStatus();
+        stage.setStatus(StageStatus.GENERATING);
+        JsonNode currentOutput = stage.getCurrentRevision() == null ? null : stage.getCurrentRevision().outputJson();
+        JsonNode output;
+        try {
+            output = actionQuestRunner.generateActionQuest(projectId, wayId, currentOutput);
+        } catch (RuntimeException ex) {
+            stage.setStatus(previousStatus);
+            projectRepository.save(project);
+            throw ex;
+        }
+
+        int nextRevisionNumber = stage.getCurrentRevision() == null
+                ? 1
+                : stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, markActionQuestReview(output, wayId), Instant.now()));
+        stage.setApproved(false);
+        stage.setStatus(StageStatus.REVIEW);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView approveActionQuest(UUID projectId, String wayId) {
+        QuestProject project = getRequiredProject(projectId);
+        QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("ACTION_QUESTS stage has no revision");
+        }
+        JsonNode updatedOutput = markActionQuestApproved(stage.getCurrentRevision().outputJson(), wayId);
+        int nextRevisionNumber = stage.getCurrentRevision().revisionNumber() + 1;
+        stage.setCurrentRevision(new StageRevision(nextRevisionNumber, updatedOutput, Instant.now()));
+        boolean allApproved = areAllActionQuestsApproved(project, updatedOutput);
+        stage.setApproved(allApproved);
+        stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
         projectRepository.save(project);
         return toView(project);
     }
@@ -1066,6 +1135,100 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
         for (JsonNode chain : output.path("knowledge_chains")) {
             if (chain.path("approved").asBoolean(false)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private JsonNode markActionQuestReview(JsonNode stageOutput, String wayId) {
+        var root = objectMapper.createObjectNode();
+        var ways = objectMapper.createArrayNode();
+        JsonNode existing = stageOutput == null ? null : stageOutput.path("ways");
+        if (existing != null && existing.isArray()) {
+            for (JsonNode way : existing) {
+                String id = way.path("way_id").asText("");
+                var wayNode = way.deepCopy();
+                if (id.equalsIgnoreCase(wayId)) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("status", StageStatus.REVIEW.name());
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("approved", false);
+                }
+                ways.add(wayNode);
+            }
+        }
+        root.set("ways", ways);
+        return root;
+    }
+
+    private JsonNode markActionQuestApproved(JsonNode stageOutput, String wayId) {
+        if (stageOutput == null || !stageOutput.path("ways").isArray()) {
+            throw new ConflictException("No generated action quests to approve");
+        }
+        var root = objectMapper.createObjectNode();
+        var ways = objectMapper.createArrayNode();
+        boolean found = false;
+        for (JsonNode way : stageOutput.path("ways")) {
+            String id = way.path("way_id").asText("");
+            var wayNode = way.deepCopy();
+            if (id.equalsIgnoreCase(wayId)) {
+                found = true;
+                ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("status", StageStatus.APPROVED.name());
+                ((com.fasterxml.jackson.databind.node.ObjectNode) wayNode).put("approved", true);
+            }
+            ways.add(wayNode);
+        }
+        if (!found) {
+            throw new NotFoundException("Generated action quest block not found: " + wayId);
+        }
+        root.set("ways", ways);
+        return root;
+    }
+
+    private boolean areAllActionQuestsApproved(QuestProject project, JsonNode actionQuestsOutput) {
+        QuestStage scenesStage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
+        JsonNode generatedWays = scenesStage.getCurrentRevision() == null
+                ? null
+                : scenesStage.getCurrentRevision().outputJson().path("ways");
+        if (generatedWays == null || !generatedWays.isArray() || generatedWays.isEmpty()) {
+            return false;
+        }
+
+        Set<String> requiredWayIds = new HashSet<>();
+        for (JsonNode way : generatedWays) {
+            if (way.path("approved").asBoolean(false)) {
+                String wayId = way.path("way_id").asText("").toUpperCase();
+                if (!wayId.isBlank()) {
+                    requiredWayIds.add(wayId);
+                }
+            }
+        }
+        if (requiredWayIds.isEmpty()) {
+            return false;
+        }
+
+        Set<String> approvedWayIds = new HashSet<>();
+        JsonNode ways = actionQuestsOutput.path("ways");
+        if (ways.isArray()) {
+            for (JsonNode way : ways) {
+                if (way.path("approved").asBoolean(false)) {
+                    String wayId = way.path("way_id").asText("").toUpperCase();
+                    if (!wayId.isBlank()) {
+                        approvedWayIds.add(wayId);
+                    }
+                }
+            }
+        }
+        return approvedWayIds.containsAll(requiredWayIds);
+    }
+
+    private boolean hasAtLeastOneApprovedAchievementScene(QuestProject project) {
+        QuestStage scenesStage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
+        JsonNode output = scenesStage.getCurrentRevision() == null ? null : scenesStage.getCurrentRevision().outputJson();
+        if (output == null || !output.path("ways").isArray()) {
+            return false;
+        }
+        for (JsonNode way : output.path("ways")) {
+            if (way.path("approved").asBoolean(false)) {
                 return true;
             }
         }

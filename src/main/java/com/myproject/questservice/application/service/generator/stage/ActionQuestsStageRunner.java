@@ -1,6 +1,9 @@
 package com.myproject.questservice.application.service.generator.stage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.NotFoundException;
@@ -16,7 +19,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class ActionQuestsStageRunner implements StageRunner, PromptPreviewStageRunner {
+public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are an Action Quest Generator for a KR2-style quest pipeline.
 
@@ -57,6 +60,7 @@ public class ActionQuestsStageRunner implements StageRunner, PromptPreviewStageR
 
     private final ProjectRepository projectRepository;
     private final AiClient aiClient;
+    private final ObjectMapper objectMapper;
 
     @Override
     public StageType type() {
@@ -65,38 +69,62 @@ public class ActionQuestsStageRunner implements StageRunner, PromptPreviewStageR
 
     @Override
     public JsonNode generate(UUID projectId) {
+        throw new ConflictException("ACTION_QUESTS supports way-by-way generation only");
+    }
+
+    @Override
+    public JsonNode generateActionQuest(UUID projectId, String wayId, JsonNode currentOutput) {
+        if (wayId == null || wayId.isBlank()) {
+            throw new ConflictException("wayId is required");
+        }
+        String normalizedWayId = wayId.trim();
+
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
 
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
-        QuestStage scenesStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_SCENES);
+        QuestStage scenesStage = requiredStageWithRevision(project, StageType.ACHIEVEMENT_SCENES);
+
+        JsonNode waySceneNode = findByWayId(scenesStage.getCurrentRevision().outputJson().path("ways"), normalizedWayId);
+        if (waySceneNode == null) {
+            throw new NotFoundException("ACHIEVEMENT_SCENES way not found: " + normalizedWayId);
+        }
+        if (!waySceneNode.path("approved").asBoolean(false)) {
+            throw new ConflictException("ACHIEVEMENT_SCENES way is not approved: " + normalizedWayId);
+        }
+        String achievementId = waySceneNode.path("achievement_id").asText("");
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
 
         String userPrompt = """
-                Build ACTION_QUESTS from approved WORLD, ACHIEVEMENT_REALISATION, and ACHIEVEMENT_SCENES.
+                Build ACTION_QUESTS for one way only.
+
+                way_id: %s
 
                 world_json:
                 %s
 
-                achievement_realisation_json:
+                selected_realisation_way_json:
                 %s
 
-                achievement_scenes_json:
+                selected_achievement_scenes_way_json:
                 %s
 
                 Requirements:
-                - generate one mini-quest for each source action in achievement_scenes_json
+                - generate mini-quests only for actions in selected_achievement_scenes_way_json
                 - each mini-quest must include a concrete situation and 2-4 meaningful choices
                 - each choice must have clear consequence and risk level
                 - keep KR2 quest tone and pacing
                 - no dialogue screenplay format
                 - all text in Russian
                 """.formatted(
+                normalizedWayId,
                 worldStage.getCurrentRevision().outputJson(),
-                realisationStage.getCurrentRevision().outputJson(),
-                scenesStage.getCurrentRevision().outputJson()
+                wayNode == null ? "{}" : wayNode.toString(),
+                waySceneNode.toString()
         );
-        return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+        JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
+        return mergeWayOutput(currentOutput, generated, achievementId, normalizedWayId);
     }
 
     @Override
@@ -106,31 +134,41 @@ public class ActionQuestsStageRunner implements StageRunner, PromptPreviewStageR
 
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
-        QuestStage scenesStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_SCENES);
+        QuestStage scenesStage = requiredStageWithRevision(project, StageType.ACHIEVEMENT_SCENES);
 
+        JsonNode wayScenes = scenesStage.getCurrentRevision().outputJson().path("ways");
+        JsonNode firstWay = firstWayNode(wayScenes);
+        if (firstWay == null) {
+            throw new ConflictException("ACTION_QUESTS preview requires at least one generated ACHIEVEMENT_SCENES way");
+        }
+        String wayId = firstWay.path("way_id").asText("");
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), wayId);
         String userPrompt = """
-                Build ACTION_QUESTS from approved WORLD, ACHIEVEMENT_REALISATION, and ACHIEVEMENT_SCENES.
+                Build ACTION_QUESTS for one way only.
+
+                way_id: %s
 
                 world_json:
                 %s
 
-                achievement_realisation_json:
+                selected_realisation_way_json:
                 %s
 
-                achievement_scenes_json:
+                selected_achievement_scenes_way_json:
                 %s
 
                 Requirements:
-                - generate one mini-quest for each source action in achievement_scenes_json
+                - generate mini-quests only for actions in selected_achievement_scenes_way_json
                 - each mini-quest must include a concrete situation and 2-4 meaningful choices
                 - each choice must have clear consequence and risk level
                 - keep KR2 quest tone and pacing
                 - no dialogue screenplay format
                 - all text in Russian
                 """.formatted(
+                wayId,
                 worldStage.getCurrentRevision().outputJson(),
-                realisationStage.getCurrentRevision().outputJson(),
-                scenesStage.getCurrentRevision().outputJson()
+                wayNode == null ? "{}" : wayNode.toString(),
+                firstWay
         );
         return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
@@ -142,5 +180,76 @@ public class ActionQuestsStageRunner implements StageRunner, PromptPreviewStageR
             throw new ConflictException("ACTION_QUESTS generation requires APPROVED " + type + " stage");
         }
         return stage;
+    }
+
+    private QuestStage requiredStageWithRevision(QuestProject project, StageType type) {
+        QuestStage stage = project.findStage(type)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("ACTION_QUESTS generation requires generated " + type + " stage");
+        }
+        return stage;
+    }
+
+    private JsonNode findByWayId(JsonNode arrayNode, String wayId) {
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return null;
+        }
+        for (JsonNode item : arrayNode) {
+            if (wayId.equalsIgnoreCase(item.path("way_id").asText(""))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private JsonNode findWay(JsonNode realisationJson, String wayId) {
+        JsonNode realisations = realisationJson.path("achievement_realisations");
+        if (!realisations.isArray()) {
+            return null;
+        }
+        for (JsonNode realisation : realisations) {
+            String achievementId = realisation.path("achievement_id").asText("");
+            JsonNode ways = realisation.path("ways");
+            if (!ways.isArray()) {
+                continue;
+            }
+            for (JsonNode way : ways) {
+                if (wayId.equalsIgnoreCase(way.path("id").asText(""))) {
+                    ObjectNode node = way.deepCopy();
+                    node.put("achievement_id", achievementId);
+                    return node;
+                }
+            }
+        }
+        return null;
+    }
+
+    private JsonNode firstWayNode(JsonNode ways) {
+        if (ways == null || !ways.isArray() || ways.isEmpty()) {
+            return null;
+        }
+        return ways.get(0);
+    }
+
+    private JsonNode mergeWayOutput(JsonNode currentOutput, JsonNode generated, String achievementId, String wayId) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode ways = objectMapper.createArrayNode();
+        if (currentOutput != null && currentOutput.path("ways").isArray()) {
+            for (JsonNode existing : currentOutput.path("ways")) {
+                if (!wayId.equalsIgnoreCase(existing.path("way_id").asText(""))) {
+                    ways.add(existing);
+                }
+            }
+        }
+        ObjectNode normalized = objectMapper.createObjectNode();
+        normalized.put("achievement_id", achievementId);
+        normalized.put("way_id", wayId);
+        normalized.set("action_quests", generated.path("action_quests").isArray()
+                ? generated.path("action_quests")
+                : objectMapper.createArrayNode());
+        ways.add(normalized);
+        root.set("ways", ways);
+        return root;
     }
 }
