@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class QuestConstraintsStageRunner implements StageRunner {
+public class QuestConstraintsStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are a Quest Constraints Generator for a quest generation pipeline.
 
@@ -72,6 +72,18 @@ public class QuestConstraintsStageRunner implements StageRunner {
 
         String userPrompt = buildUserPrompt(questDescriptionStage.getCurrentRevision().outputJson());
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+        QuestStage questDescriptionStage = project.findStage(StageType.QUEST_DESCRIPTION)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_DESCRIPTION));
+        if (questDescriptionStage.getStatus() != StageStatus.APPROVED || questDescriptionStage.getCurrentRevision() == null) {
+            throw new ConflictException("QUEST_CONSTRAINTS generation requires APPROVED QUEST_DESCRIPTION stage");
+        }
+        return new StagePromptPreview(SYSTEM_PROMPT, buildUserPrompt(questDescriptionStage.getCurrentRevision().outputJson()));
     }
 
     private String buildUserPrompt(JsonNode approvedQuestDescriptionJson) {

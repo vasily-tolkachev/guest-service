@@ -13,7 +13,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class MysteryStageRunner implements StageRunner {
+public class MysteryStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are a Quest Designer for a KR2-style multi-stage quest generation pipeline.
             
@@ -387,6 +387,13 @@ public class MysteryStageRunner implements StageRunner {
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
         String userPrompt = buildUserPrompt(project);
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+        return new StagePromptPreview(SYSTEM_PROMPT, buildUserPrompt(project));
     }
 
     private String buildUserPrompt(QuestProject project) {

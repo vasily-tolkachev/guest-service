@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class ActionQuestsStageRunner implements StageRunner {
+public class ActionQuestsStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are an Action Quest Generator for a KR2-style quest pipeline.
 
@@ -97,6 +97,42 @@ public class ActionQuestsStageRunner implements StageRunner {
                 scenesStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+        QuestStage scenesStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_SCENES);
+
+        String userPrompt = """
+                Build ACTION_QUESTS from approved WORLD, ACHIEVEMENT_REALISATION, and ACHIEVEMENT_SCENES.
+
+                world_json:
+                %s
+
+                achievement_realisation_json:
+                %s
+
+                achievement_scenes_json:
+                %s
+
+                Requirements:
+                - generate one mini-quest for each source action in achievement_scenes_json
+                - each mini-quest must include a concrete situation and 2-4 meaningful choices
+                - each choice must have clear consequence and risk level
+                - keep KR2 quest tone and pacing
+                - no dialogue screenplay format
+                - all text in Russian
+                """.formatted(
+                worldStage.getCurrentRevision().outputJson(),
+                realisationStage.getCurrentRevision().outputJson(),
+                scenesStage.getCurrentRevision().outputJson()
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {

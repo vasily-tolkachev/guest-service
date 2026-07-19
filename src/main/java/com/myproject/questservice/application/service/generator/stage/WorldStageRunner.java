@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class WorldStageRunner implements StageRunner {
+public class WorldStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are a World Design Generator for a quest generation pipeline.
 
@@ -107,6 +107,37 @@ public class WorldStageRunner implements StageRunner {
                 resourceAnalysisStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage mysteryStage = project.findStage(StageType.QUEST_DESCRIPTION)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_DESCRIPTION));
+        QuestStage constraintsStage = project.findStage(StageType.QUEST_CONSTRAINTS)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.QUEST_CONSTRAINTS));
+        QuestStage resourceAnalysisStage = project.findStage(StageType.ACHIEVEMENT_RESOURCE_ANALYSIS)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + StageType.ACHIEVEMENT_RESOURCE_ANALYSIS));
+
+        if (mysteryStage.getStatus() != StageStatus.APPROVED || mysteryStage.getCurrentRevision() == null) {
+            throw new ConflictException("WORLD generation requires APPROVED QUEST_DESCRIPTION stage");
+        }
+        if (constraintsStage.getStatus() != StageStatus.APPROVED || constraintsStage.getCurrentRevision() == null) {
+            throw new ConflictException("WORLD generation requires APPROVED QUEST_CONSTRAINTS stage");
+        }
+        if (resourceAnalysisStage.getStatus() != StageStatus.APPROVED || resourceAnalysisStage.getCurrentRevision() == null) {
+            throw new ConflictException("WORLD generation requires APPROVED ACHIEVEMENT_RESOURCE_ANALYSIS stage");
+        }
+
+        String userPrompt = buildUserPrompt(
+                project,
+                mysteryStage.getCurrentRevision().outputJson(),
+                constraintsStage.getCurrentRevision().outputJson(),
+                resourceAnalysisStage.getCurrentRevision().outputJson()
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
     private String buildUserPrompt(QuestProject project, JsonNode approvedMysteryJson, JsonNode approvedConstraintsJson, JsonNode approvedResourceAnalysisJson) {

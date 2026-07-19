@@ -16,6 +16,8 @@ import com.myproject.questservice.application.service.generator.stage.StepStageR
 import com.myproject.questservice.application.service.generator.stage.ChapterStageRunner;
 import com.myproject.questservice.application.service.generator.stage.SceneStageRunner;
 import com.myproject.questservice.application.service.generator.stage.AchievementSceneStageRunner;
+import com.myproject.questservice.application.service.generator.stage.PromptPreviewStageRunner;
+import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
 import com.myproject.questservice.domain.generator.StageRevision;
@@ -139,6 +141,16 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
         projectRepository.save(project);
         return toView(project);
+    }
+
+    @Override
+    public StagePromptPreview previewStagePrompt(UUID projectId, StageType stageType) {
+        StageRunner runner = stageRunnerRegistry.find(stageType)
+                .orElseThrow(() -> new NotImplementedException("StageRunner is not implemented for " + stageType));
+        if (!(runner instanceof PromptPreviewStageRunner previewRunner)) {
+            throw new ConflictException("Stage does not support prompt preview: " + stageType);
+        }
+        return previewRunner.previewPrompt(projectId);
     }
 
     @Override

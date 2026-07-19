@@ -6,6 +6,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJso
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
+import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 import com.myproject.questservice.domain.generator.StageType;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -47,6 +48,11 @@ public class QuestGeneratorController {
     @PostMapping("/{id}/stages/{type}/generate")
     public QuestProjectView generateStage(@PathVariable UUID id, @PathVariable StageType type) {
         return questGeneratorUseCase.generateStage(id, type);
+    }
+
+    @PostMapping("/{id}/stages/{type}/preview")
+    public StagePromptPreview previewStagePrompt(@PathVariable UUID id, @PathVariable StageType type) {
+        return questGeneratorUseCase.previewStagePrompt(id, type);
     }
 
     @PostMapping("/{id}/stages/{type}/steps/{step}/generate")

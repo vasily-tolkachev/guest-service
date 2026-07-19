@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class AchievementInformationFlowStageRunner implements StageRunner {
+public class AchievementInformationFlowStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are an Achievement Information Flow Generator for a quest generation pipeline.
 
@@ -101,6 +101,52 @@ public class AchievementInformationFlowStageRunner implements StageRunner {
                 realisationStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage descriptionStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
+        QuestStage constraintsStage = requiredApprovedStage(project, StageType.QUEST_CONSTRAINTS);
+        QuestStage analysisStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_RESOURCE_ANALYSIS);
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+
+        String userPrompt = """
+                Build ACHIEVEMENT_INFORMATION_FLOW from approved stages:
+                QUEST_DESCRIPTION, QUEST_CONSTRAINTS, ACHIEVEMENT_RESOURCE_ANALYSIS, WORLD, ACHIEVEMENT_REALISATION.
+
+                quest_description_json:
+                %s
+
+                constraints_json:
+                %s
+
+                achievement_resource_analysis_json:
+                %s
+
+                world_json:
+                %s
+
+                achievement_realisation_json:
+                %s
+
+                Requirements:
+                - for each way from ACHIEVEMENT_REALISATION create one flow block
+                - explain how player gets required knowledge/information
+                - keep it abstract but actionable for later scene generation
+                - no dialogues, no cinematic text
+                - all text in Russian
+                """.formatted(
+                descriptionStage.getCurrentRevision().outputJson(),
+                constraintsStage.getCurrentRevision().outputJson(),
+                analysisStage.getCurrentRevision().outputJson(),
+                worldStage.getCurrentRevision().outputJson(),
+                realisationStage.getCurrentRevision().outputJson()
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {

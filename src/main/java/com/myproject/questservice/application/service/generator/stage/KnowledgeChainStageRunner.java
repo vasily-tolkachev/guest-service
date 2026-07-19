@@ -21,7 +21,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class KnowledgeChainStageRunner implements StageRunner {
+public class KnowledgeChainStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are a Knowledge Chain Generator for a quest generation pipeline.
 
@@ -138,6 +138,65 @@ public class KnowledgeChainStageRunner implements StageRunner {
         ObjectNode result = objectMapper.createObjectNode();
         result.set("knowledge_chains", chains);
         return result;
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage descriptionStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
+        QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+
+        JsonNode informationFlows = informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow");
+        JsonNode firstFlow = objectMapper.createObjectNode();
+        JsonNode firstWay = objectMapper.createObjectNode();
+        JsonNode firstScopedWorld = objectMapper.createObjectNode();
+        if (informationFlows.isArray() && !informationFlows.isEmpty()) {
+            firstFlow = informationFlows.get(0);
+            String wayId = firstFlow.path("way_id").asText("");
+            if (!wayId.isBlank()) {
+                firstWay = findWay(realisationStage.getCurrentRevision().outputJson(), wayId);
+                if (firstWay != null) {
+                    firstScopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), firstWay);
+                }
+            }
+        }
+
+        String userPrompt = """
+                Build KNOWLEDGE_CHAIN for one way only.
+
+                way_id: %s
+
+                quest_description_json:
+                %s
+
+                information_flow_for_way_json:
+                %s
+
+                scoped_world_for_way_json:
+                %s
+
+                way_json:
+                %s
+
+                Requirements:
+                - produce exactly one knowledge_chain block
+                - each chain must have 4-8 linked knowledge steps
+                - each step must describe how new knowledge is obtained
+                - chain should be playable and logically connected
+                - do not turn chain into direct achievement checklist
+                - all text in Russian
+                """.formatted(
+                firstFlow.path("way_id").asText(""),
+                compactJson(descriptionStage.getCurrentRevision().outputJson()),
+                compactJson(firstFlow),
+                compactJson(firstScopedWorld),
+                compactJson(firstWay)
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {

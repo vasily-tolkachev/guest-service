@@ -21,7 +21,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class AchievementScenesStageRunner implements AchievementSceneStageRunner {
+public class AchievementScenesStageRunner implements AchievementSceneStageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are an Achievement Scene Generator for a KR2-style quest pipeline.
 
@@ -71,6 +71,73 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
     @Override
     public JsonNode generate(UUID projectId) {
         throw new ConflictException("ACHIEVEMENT_SCENES supports achievement-by-achievement generation only");
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage descriptionStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
+        QuestStage constraintsStage = requiredApprovedStage(project, StageType.QUEST_CONSTRAINTS);
+        QuestStage analysisStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_RESOURCE_ANALYSIS);
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+        QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
+        QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
+        QuestStage knowledgeChainStage = requiredApprovedStage(project, StageType.KNOWLEDGE_CHAIN);
+
+        JsonNode firstWay = firstWayNode(realisationStage.getCurrentRevision().outputJson());
+        if (firstWay == null) {
+            throw new ConflictException("ACHIEVEMENT_SCENES preview requires at least one way in ACHIEVEMENT_REALISATION");
+        }
+        String wayId = firstWay.path("id").asText("");
+        String achievementId = firstWay.path("achievement_id").asText("");
+        JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), wayId);
+        JsonNode infoFlowNode = findByWayId(informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow"), wayId);
+        JsonNode knowledgeChainNode = findByWayId(knowledgeChainStage.getCurrentRevision().outputJson().path("knowledge_chains"), wayId);
+        JsonNode scopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), wayNode);
+
+        String userPrompt = """
+                Generate scenes for one way only.
+
+                way_id: %s
+
+                constraints_json:
+                %s
+
+                achievement_resource_analysis_json:
+                %s
+
+                scoped_world_json:
+                %s
+
+                selected_way_json:
+                %s
+
+                selected_information_flow_json:
+                %s
+
+                selected_knowledge_chain_json:
+                %s
+
+                Requirements:
+                - generate 1-3 short quest entries for this way
+                - style should feel like Space Rangers 2 quest episodes
+                - use only world entities from world_json
+                - align scenes with this exact realisation way
+                - take one meaningful first_action and convert it into a choice-driven quest situation
+                - each choice must have a clear consequence and meaningful impact
+                - no global endings or unrelated ways
+                """.formatted(
+                wayId,
+                compactJson(constraintsStage.getCurrentRevision().outputJson()),
+                compactJson(analysisStage.getCurrentRevision().outputJson()),
+                compactJson(scopedWorld),
+                compactJson(wayNode),
+                compactJson(infoFlowNode),
+                compactJson(knowledgeChainNode)
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt + "\n\npreview_for_achievement_id: " + achievementId);
     }
 
     @Override
@@ -271,5 +338,24 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
 
         root.set("ways", ways);
         return root;
+    }
+
+    private JsonNode firstWayNode(JsonNode realisationJson) {
+        JsonNode realisations = realisationJson.path("achievement_realisations");
+        if (!realisations.isArray()) {
+            return null;
+        }
+        for (JsonNode realisation : realisations) {
+            String achievementId = realisation.path("achievement_id").asText("");
+            JsonNode ways = realisation.path("ways");
+            if (!ways.isArray() || ways.isEmpty()) {
+                continue;
+            }
+            JsonNode firstWay = ways.get(0);
+            ObjectNode node = firstWay.deepCopy();
+            node.put("achievement_id", achievementId);
+            return node;
+        }
+        return null;
     }
 }

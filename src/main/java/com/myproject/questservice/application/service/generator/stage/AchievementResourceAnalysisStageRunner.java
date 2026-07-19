@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class AchievementResourceAnalysisStageRunner implements StageRunner {
+public class AchievementResourceAnalysisStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are an Achievement Resource Analysis Generator for a quest generation pipeline.
 
@@ -82,6 +82,34 @@ public class AchievementResourceAnalysisStageRunner implements StageRunner {
                 constraintsStage.getCurrentRevision().outputJson().toString()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+        QuestStage descriptionStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
+        QuestStage constraintsStage = requiredApprovedStage(project, StageType.QUEST_CONSTRAINTS);
+        String userPrompt = """
+                Build ACHIEVEMENT_RESOURCE_ANALYSIS from approved QUEST_DESCRIPTION and QUEST_CONSTRAINTS.
+
+                approved_quest_description_json:
+                %s
+
+                approved_constraints_json:
+                %s
+
+                Requirements:
+                - produce analysis for each achievement from QUEST_DESCRIPTION.achievements
+                - focus only on usable capability categories, not concrete world entities
+                - keep entries concise and practical
+                - each list should contain 1-6 entries
+                - all text in Russian
+                """.formatted(
+                descriptionStage.getCurrentRevision().outputJson().toString(),
+                constraintsStage.getCurrentRevision().outputJson().toString()
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {

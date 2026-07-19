@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class NpcStageRunner implements StageRunner {
+public class NpcStageRunner implements StageRunner, PromptPreviewStageRunner {
     private static final String SYSTEM_PROMPT = """
             You are an Achievement Realisation Generator for a quest generation pipeline.
 
@@ -73,6 +73,24 @@ public class NpcStageRunner implements StageRunner {
                 worldStage.getCurrentRevision().outputJson()
         );
         return aiClient.generate(SYSTEM_PROMPT, userPrompt);
+    }
+
+    @Override
+    public StagePromptPreview previewPrompt(UUID projectId) {
+        QuestProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
+
+        QuestStage mysteryStage = requiredApprovedStage(project, StageType.QUEST_DESCRIPTION);
+        QuestStage constraintsStage = requiredApprovedStage(project, StageType.QUEST_CONSTRAINTS);
+        QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
+
+        String userPrompt = buildUserPrompt(
+                project,
+                mysteryStage.getCurrentRevision().outputJson(),
+                constraintsStage.getCurrentRevision().outputJson(),
+                worldStage.getCurrentRevision().outputJson()
+        );
+        return new StagePromptPreview(SYSTEM_PROMPT, userPrompt);
     }
 
     private QuestStage requiredApprovedStage(QuestProject project, StageType type) {
