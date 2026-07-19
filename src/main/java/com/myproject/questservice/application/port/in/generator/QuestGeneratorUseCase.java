@@ -29,8 +29,6 @@ public interface QuestGeneratorUseCase {
     QuestProjectView approveAchievementScene(UUID projectId, String wayId);
     QuestProjectView generateKnowledgeChain(UUID projectId, String wayId);
     QuestProjectView approveKnowledgeChain(UUID projectId, String wayId);
-    QuestProjectView generateActionQuest(UUID projectId, String wayId);
-    QuestProjectView approveActionQuest(UUID projectId, String wayId);
     QuestProjectView generateActionResolution(UUID projectId, String wayId, String sceneId, String actionId);
     QuestProjectView approveActionResolution(UUID projectId, String wayId, String sceneId, String actionId);
     StagePromptPreview previewKnowledgeChainPrompt(UUID projectId, String wayId);

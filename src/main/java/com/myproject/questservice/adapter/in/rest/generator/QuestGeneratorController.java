@@ -115,19 +115,9 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.approveKnowledgeChain(id, wayId);
     }
 
-    @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/generate")
-    public QuestProjectView generateActionQuest(@PathVariable UUID id, @PathVariable String wayId) {
-        return questGeneratorUseCase.generateActionQuest(id, wayId);
-    }
-
     @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/preview")
     public StagePromptPreview previewActionQuest(@PathVariable UUID id, @PathVariable String wayId) {
         return questGeneratorUseCase.previewActionQuestPrompt(id, wayId);
-    }
-
-    @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/approve")
-    public QuestProjectView approveActionQuest(@PathVariable UUID id, @PathVariable String wayId) {
-        return questGeneratorUseCase.approveActionQuest(id, wayId);
     }
 
     @PostMapping("/{id}/stages/ACTION_QUESTS/ways/{wayId}/scenes/{sceneId}/actions/{actionId}/preview")

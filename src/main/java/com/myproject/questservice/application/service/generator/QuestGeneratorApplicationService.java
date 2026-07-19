@@ -442,16 +442,6 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView generateActionQuest(UUID projectId, String wayId) {
-        throw new ConflictException("ACTION_QUESTS way-level generation is deprecated. Use action-level endpoint: /stages/ACTION_QUESTS/ways/{wayId}/scenes/{sceneId}/actions/{actionId}/generate");
-    }
-
-    @Override
-    public QuestProjectView approveActionQuest(UUID projectId, String wayId) {
-        throw new ConflictException("ACTION_QUESTS way-level approval is deprecated. Approve specific action resolutions.");
-    }
-
-    @Override
     public QuestProjectView generateActionResolution(UUID projectId, String wayId, String sceneId, String actionId) {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, StageType.ACTION_QUESTS);

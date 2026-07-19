@@ -359,27 +359,6 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
         return ways.get(0);
     }
 
-    private JsonNode mergeWayOutput(JsonNode currentOutput, JsonNode generated, String achievementId, String wayId) {
-        ObjectNode root = objectMapper.createObjectNode();
-        ArrayNode ways = objectMapper.createArrayNode();
-        if (currentOutput != null && currentOutput.path("ways").isArray()) {
-            for (JsonNode existing : currentOutput.path("ways")) {
-                if (!wayId.equalsIgnoreCase(existing.path("way_id").asText(""))) {
-                    ways.add(existing);
-                }
-            }
-        }
-        ObjectNode normalized = objectMapper.createObjectNode();
-        normalized.put("achievement_id", achievementId);
-        normalized.put("way_id", wayId);
-        normalized.set("action_quests", generated.path("action_quests").isArray()
-                ? generated.path("action_quests")
-                : objectMapper.createArrayNode());
-        ways.add(normalized);
-        root.set("ways", ways);
-        return root;
-    }
-
     private JsonNode mergeResolutionOutput(
             JsonNode currentOutput,
             JsonNode generated,
