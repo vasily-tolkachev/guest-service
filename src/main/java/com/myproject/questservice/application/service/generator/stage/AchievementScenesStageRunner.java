@@ -156,7 +156,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         QuestStage worldStage = requiredApprovedStage(project, StageType.WORLD);
         QuestStage realisationStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_REALISATION);
         QuestStage informationFlowStage = requiredApprovedStage(project, StageType.ACHIEVEMENT_INFORMATION_FLOW);
-        QuestStage knowledgeChainStage = requiredApprovedStage(project, StageType.KNOWLEDGE_CHAIN);
+        QuestStage knowledgeChainStage = requiredStageWithRevision(project, StageType.KNOWLEDGE_CHAIN);
 
         JsonNode wayNode = findWay(realisationStage.getCurrentRevision().outputJson(), normalizedWayId);
         if (wayNode == null) {
@@ -165,6 +165,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         String achievementId = wayNode.path("achievement_id").asText("");
         JsonNode infoFlowNode = findByWayId(informationFlowStage.getCurrentRevision().outputJson().path("achievement_information_flow"), normalizedWayId);
         JsonNode knowledgeChainNode = findByWayId(knowledgeChainStage.getCurrentRevision().outputJson().path("knowledge_chains"), normalizedWayId);
+        ensureKnowledgeChainWayApproved(knowledgeChainNode, normalizedWayId);
         JsonNode scopedWorld = buildScopedWorld(worldStage.getCurrentRevision().outputJson(), wayNode);
 
         String userPrompt = """
@@ -219,6 +220,24 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             throw new ConflictException("ACHIEVEMENT_SCENES generation requires APPROVED " + type + " stage");
         }
         return stage;
+    }
+
+    private QuestStage requiredStageWithRevision(QuestProject project, StageType type) {
+        QuestStage stage = project.findStage(type)
+                .orElseThrow(() -> new NotFoundException("Stage not found: " + type));
+        if (stage.getCurrentRevision() == null) {
+            throw new ConflictException("ACHIEVEMENT_SCENES generation requires generated " + type + " stage");
+        }
+        return stage;
+    }
+
+    private void ensureKnowledgeChainWayApproved(JsonNode knowledgeChainNode, String wayId) {
+        if (knowledgeChainNode == null || knowledgeChainNode.isMissingNode() || knowledgeChainNode.isNull() || knowledgeChainNode.isEmpty()) {
+            throw new ConflictException("KNOWLEDGE_CHAIN for way is missing: " + wayId);
+        }
+        if (!knowledgeChainNode.path("approved").asBoolean(false)) {
+            throw new ConflictException("KNOWLEDGE_CHAIN way is not approved: " + wayId);
+        }
     }
 
     private JsonNode findWay(JsonNode realisationJson, String wayId) {

@@ -274,7 +274,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         QuestProject project = getRequiredProject(projectId);
         QuestStage stage = getRequiredStage(project, StageType.ACHIEVEMENT_SCENES);
         if (stage.getStatus() == StageStatus.NOT_STARTED) {
-            stage.setStatus(StageStatus.READY);
+            if (hasAtLeastOneApprovedKnowledgeChain(project)) {
+                stage.setStatus(StageStatus.READY);
+            }
         }
         if (stage.getStatus() != StageStatus.READY && stage.getStatus() != StageStatus.REVIEW && stage.getStatus() != StageStatus.APPROVED) {
             throw new ConflictException("ACHIEVEMENT_SCENES stage is not ready for achievement generation");
@@ -377,6 +379,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         boolean allApproved = areAllKnowledgeChainsApproved(project, updatedOutput);
         stage.setApproved(allApproved);
         stage.setStatus(allApproved ? StageStatus.APPROVED : StageStatus.REVIEW);
+
+        project.nextStage(StageType.KNOWLEDGE_CHAIN).ifPresent(nextStage -> {
+            if (nextStage.getType() == StageType.ACHIEVEMENT_SCENES && nextStage.getStatus() == StageStatus.NOT_STARTED) {
+                nextStage.setStatus(StageStatus.READY);
+            }
+        });
+
         projectRepository.save(project);
         return toView(project);
     }
@@ -1047,6 +1056,20 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return approvedWayIds.containsAll(requiredWayIds);
+    }
+
+    private boolean hasAtLeastOneApprovedKnowledgeChain(QuestProject project) {
+        QuestStage knowledgeChainStage = getRequiredStage(project, StageType.KNOWLEDGE_CHAIN);
+        JsonNode output = knowledgeChainStage.getCurrentRevision() == null ? null : knowledgeChainStage.getCurrentRevision().outputJson();
+        if (output == null || !output.path("knowledge_chains").isArray()) {
+            return false;
+        }
+        for (JsonNode chain : output.path("knowledge_chains")) {
+            if (chain.path("approved").asBoolean(false)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> readStringArray(JsonNode arrayNode) {
