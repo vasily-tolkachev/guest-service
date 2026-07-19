@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.service.ValidationConflictException;
 import com.myproject.questservice.application.service.generator.ProjectRepository;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
@@ -301,7 +302,10 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         );
 
         JsonNode generated = aiClient.generate(SYSTEM_PROMPT, userPrompt);
-        validateSceneGraph(generated.path("scenes"));
+        List<String> validationErrors = validateSceneGraph(generated.path("scenes"));
+        if (!validationErrors.isEmpty()) {
+            throw new ValidationConflictException("ACHIEVEMENT_SCENES validation failed", validationErrors, generated);
+        }
         return mergeAchievementOutput(currentOutput, generated, achievementId, normalizedWayId);
     }
 
@@ -499,19 +503,22 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
         return normalized;
     }
 
-    private void validateSceneGraph(JsonNode scenesNode) {
+    private List<String> validateSceneGraph(JsonNode scenesNode) {
+        List<String> errors = new ArrayList<>();
         if (!scenesNode.isArray() || scenesNode.isEmpty()) {
-            throw new ConflictException("ACHIEVEMENT_SCENES generation produced empty scenes");
+            errors.add("ACHIEVEMENT_SCENES generation produced empty scenes");
+            return errors;
         }
         Set<String> ids = new HashSet<>();
         for (JsonNode scene : scenesNode) {
             String id = scene.path("id").asText("").trim();
             if (id.isBlank()) {
-                throw new ConflictException("ACHIEVEMENT_SCENES scene id is required");
+                errors.add("ACHIEVEMENT_SCENES scene id is required");
+                continue;
             }
             ids.add(id.toUpperCase());
-            validateWorldStateFacts(scene.path("world_state"), id);
-            validateActions(scene.path("available_actions"), id);
+            validateWorldStateFacts(scene.path("world_state"), id, errors);
+            validateActions(scene.path("available_actions"), id, errors);
         }
         for (JsonNode scene : scenesNode) {
             JsonNode links = scene.path("leads_to_scene_ids");
@@ -524,41 +531,42 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
                     continue;
                 }
                 if (!ids.contains(target.toUpperCase())) {
-                    throw new ConflictException("ACHIEVEMENT_SCENES has invalid graph link to unknown scene: " + target);
+                    errors.add("ACHIEVEMENT_SCENES has invalid graph link to unknown scene: " + target);
                 }
             }
         }
+        return errors;
     }
 
-    private void validateWorldStateFacts(JsonNode worldState, String sceneId) {
+    private void validateWorldStateFacts(JsonNode worldState, String sceneId, List<String> errors) {
         if (worldState == null || !worldState.isObject()) {
             return;
         }
-        validateFactArray(worldState.path("known_facts"), "known_facts", sceneId);
-        validateUnknownsArray(worldState.path("unknowns"), sceneId);
-        validateFactArray(worldState.path("constraints"), "constraints", sceneId);
+        validateFactArray(worldState.path("known_facts"), "known_facts", sceneId, errors);
+        validateUnknownsArray(worldState.path("unknowns"), sceneId, errors);
+        validateFactArray(worldState.path("constraints"), "constraints", sceneId, errors);
     }
 
-    private void validateActions(JsonNode actions, String sceneId) {
+    private void validateActions(JsonNode actions, String sceneId, List<String> errors) {
         if (actions == null || !actions.isArray()) {
             return;
         }
         for (JsonNode action : actions) {
             String text = action.path("text").asText("");
             if (containsInterpretation(text)) {
-                throw new ConflictException("ACHIEVEMENT_SCENES action text must be objective in scene " + sceneId + ": " + text);
+                errors.add("ACHIEVEMENT_SCENES action text must be objective in scene " + sceneId + ": " + text);
             }
         }
     }
 
-    private void validateFactArray(JsonNode arrayNode, String fieldName, String sceneId) {
+    private void validateFactArray(JsonNode arrayNode, String fieldName, String sceneId, List<String> errors) {
         if (arrayNode == null || !arrayNode.isArray()) {
             return;
         }
         for (JsonNode item : arrayNode) {
             String text = item.asText("");
             if (containsInterpretation(text)) {
-                throw new ConflictException("ACHIEVEMENT_SCENES " + fieldName + " must contain observable facts only in scene " + sceneId + ": " + text);
+                errors.add("ACHIEVEMENT_SCENES " + fieldName + " must contain observable facts only in scene " + sceneId + ": " + text);
             }
         }
     }
@@ -592,6 +600,25 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             }
         }
         return false;
+    }
+
+    private void validateUnknownsArray(JsonNode arrayNode, String sceneId, List<String> errors) {
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return;
+        }
+        for (JsonNode item : arrayNode) {
+            String text = item.asText("").trim();
+            if (text.isBlank()) {
+                continue;
+            }
+            String lower = text.toLowerCase(Locale.ROOT);
+            if (lower.contains("лучше")
+                    || lower.contains("оптималь")
+                    || lower.contains("правильн")
+                    || lower.contains("рекомендуется")) {
+                errors.add("ACHIEVEMENT_SCENES unknowns must stay investigative in scene " + sceneId + ": " + text);
+            }
+        }
     }
 
     private JsonNode firstWayNode(JsonNode realisationJson) {

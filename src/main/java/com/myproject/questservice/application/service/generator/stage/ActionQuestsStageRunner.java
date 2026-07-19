@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.service.ValidationConflictException;
 import com.myproject.questservice.application.service.generator.ProjectRepository;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestStage;
@@ -16,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -188,7 +191,10 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
     public JsonNode generateActionResolution(UUID projectId, String wayId, String sceneId, String actionId, JsonNode currentOutput) {
         StagePromptPreview preview = previewActionResolutionPrompt(projectId, wayId, sceneId, actionId);
         JsonNode generated = aiClient.generate(preview.systemPrompt(), preview.userPrompt());
-        validateResolutionFacts(generated.path("resolution"), wayId, sceneId, actionId);
+        List<String> errors = validateResolutionFacts(generated.path("resolution"), wayId, sceneId, actionId);
+        if (!errors.isEmpty()) {
+            throw new ValidationConflictException("ACTION_QUESTS validation failed", errors, generated);
+        }
 
         QuestProject project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
@@ -428,24 +434,27 @@ public class ActionQuestsStageRunner implements ActionQuestStageRunner, PromptPr
         return root;
     }
 
-    private void validateResolutionFacts(JsonNode resolution, String wayId, String sceneId, String actionId) {
+    private List<String> validateResolutionFacts(JsonNode resolution, String wayId, String sceneId, String actionId) {
+        List<String> errors = new ArrayList<>();
         if (resolution == null || !resolution.isObject()) {
-            throw new ConflictException("ACTION_QUESTS resolution must be an object for " + wayId + "/" + sceneId + "/" + actionId);
+            errors.add("ACTION_QUESTS resolution must be an object for " + wayId + "/" + sceneId + "/" + actionId);
+            return errors;
         }
-        validateResolutionArray(resolution.path("revealed_info"), "revealed_info", wayId, sceneId, actionId);
-        validateResolutionArray(resolution.path("world_state_changes"), "world_state_changes", wayId, sceneId, actionId);
-        validateResolutionArray(resolution.path("new_actions_unlocked"), "new_actions_unlocked", wayId, sceneId, actionId);
-        validateResolutionArray(resolution.path("risks_triggered"), "risks_triggered", wayId, sceneId, actionId);
+        validateResolutionArray(resolution.path("revealed_info"), "revealed_info", wayId, sceneId, actionId, errors);
+        validateResolutionArray(resolution.path("world_state_changes"), "world_state_changes", wayId, sceneId, actionId, errors);
+        validateResolutionArray(resolution.path("new_actions_unlocked"), "new_actions_unlocked", wayId, sceneId, actionId, errors);
+        validateResolutionArray(resolution.path("risks_triggered"), "risks_triggered", wayId, sceneId, actionId, errors);
+        return errors;
     }
 
-    private void validateResolutionArray(JsonNode arrayNode, String field, String wayId, String sceneId, String actionId) {
+    private void validateResolutionArray(JsonNode arrayNode, String field, String wayId, String sceneId, String actionId, List<String> errors) {
         if (arrayNode == null || !arrayNode.isArray()) {
             return;
         }
         for (JsonNode item : arrayNode) {
             String text = item.asText("");
             if (containsInterpretation(text)) {
-                throw new ConflictException("ACTION_QUESTS " + field + " must be factual for "
+                errors.add("ACTION_QUESTS " + field + " must be factual for "
                         + wayId + "/" + sceneId + "/" + actionId + ": " + text);
             }
         }

@@ -9,11 +9,15 @@ import com.myproject.questservice.application.service.FileReadException;
 import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.application.service.NotImplementedException;
 import com.myproject.questservice.application.service.QuestChangedException;
+import com.myproject.questservice.application.service.ValidationConflictException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -34,6 +38,18 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleConflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiErrorResponse("CONFLICT", ex.getMessage(), null, null));
+    }
+
+    @ExceptionHandler(ValidationConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationConflict(ValidationConflictException ex) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", "CONFLICT");
+        payload.put("message", ex.getMessage());
+        payload.put("errors", ex.getErrors());
+        payload.put("result", ex.getResult());
+        payload.put("line", null);
+        payload.put("column", null);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(payload);
     }
 
     @ExceptionHandler(NotImplementedException.class)
