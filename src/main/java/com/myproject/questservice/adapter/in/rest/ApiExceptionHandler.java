@@ -1,5 +1,6 @@
 package com.myproject.questservice.adapter.in.rest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myproject.questservice.adapter.in.rest.dto.ApiErrorResponse;
 import com.myproject.questservice.adapter.out.dsl.error.DslProcessingException;
 import com.myproject.questservice.application.service.BadRequestException;
@@ -21,6 +22,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    private final ObjectMapper objectMapper;
+
+    public ApiExceptionHandler(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleNotFound(NotFoundException ex) {
@@ -46,7 +52,7 @@ public class ApiExceptionHandler {
         payload.put("code", "CONFLICT");
         payload.put("message", ex.getMessage());
         payload.put("errors", ex.getErrors());
-        payload.put("result", ex.getResult());
+        payload.put("result", ex.getResult() == null ? null : objectMapper.convertValue(ex.getResult(), Object.class));
         payload.put("line", null);
         payload.put("column", null);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(payload);
