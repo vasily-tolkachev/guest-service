@@ -535,7 +535,7 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             return;
         }
         validateFactArray(worldState.path("known_facts"), "known_facts", sceneId);
-        validateFactArray(worldState.path("unknowns"), "unknowns", sceneId);
+        validateUnknownsArray(worldState.path("unknowns"), sceneId);
         validateFactArray(worldState.path("constraints"), "constraints", sceneId);
     }
 
@@ -559,6 +559,27 @@ public class AchievementScenesStageRunner implements AchievementSceneStageRunner
             String text = item.asText("");
             if (containsInterpretation(text)) {
                 throw new ConflictException("ACHIEVEMENT_SCENES " + fieldName + " must contain observable facts only in scene " + sceneId + ": " + text);
+            }
+        }
+    }
+
+    private void validateUnknownsArray(JsonNode arrayNode, String sceneId) {
+        if (arrayNode == null || !arrayNode.isArray()) {
+            return;
+        }
+        for (JsonNode item : arrayNode) {
+            String text = item.asText("").trim();
+            if (text.isBlank()) {
+                continue;
+            }
+            // Unknowns may be open investigative questions.
+            // Keep only hard bans on optimization/prescriptive framing.
+            String lower = text.toLowerCase(Locale.ROOT);
+            if (lower.contains("лучше")
+                    || lower.contains("оптималь")
+                    || lower.contains("правильн")
+                    || lower.contains("рекомендуется")) {
+                throw new ConflictException("ACHIEVEMENT_SCENES unknowns must stay investigative in scene " + sceneId + ": " + text);
             }
         }
     }
