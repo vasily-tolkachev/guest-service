@@ -1,6 +1,7 @@
 package com.myproject.questservice.domain.generator;
 
 public enum StageType {
+    FIRST_SCENE,
     QUEST_DESCRIPTION,
     QUEST_CONSTRAINTS,
     ACHIEVEMENT_RESOURCE_ANALYSIS,

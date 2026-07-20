@@ -1466,6 +1466,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
     private String toStageDisplayName(StageType stageType) {
         return switch (stageType) {
+            case FIRST_SCENE -> "First Scene";
             case QUEST_DESCRIPTION -> "Quest Description";
             case QUEST_CONSTRAINTS -> "Quest Constraints";
             case ACHIEVEMENT_RESOURCE_ANALYSIS -> "Achievement Resource Analysis";
