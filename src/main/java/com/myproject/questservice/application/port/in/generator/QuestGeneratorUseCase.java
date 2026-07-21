@@ -43,4 +43,18 @@ public interface QuestGeneratorUseCase {
     String exportDsl(UUID projectId);
 
     String convertDsl(String projectName, JsonNode questGraphJson);
+
+    QuestProjectView createWorkspaceNode(UUID projectId, String sourceNodeId, String sourceActionId);
+
+    QuestProjectView getWorkspaceNode(UUID projectId, String nodeId);
+
+    QuestProjectView listWorkspaceNodes(UUID projectId);
+
+    QuestProjectView updateWorkspaceNodeDescription(UUID projectId, String nodeId, String description);
+
+    QuestProjectView addWorkspaceNodeAction(UUID projectId, String nodeId, String text);
+
+    QuestProjectView updateWorkspaceNodeAction(UUID projectId, String nodeId, String actionId, String text);
+
+    QuestProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId);
 }

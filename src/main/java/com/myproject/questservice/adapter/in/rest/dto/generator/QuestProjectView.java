@@ -7,6 +7,7 @@ public record QuestProjectView(
         String name,
         String questStyle,
         String status,
-        List<QuestStageView> stages
+        List<QuestStageView> stages,
+        Object nodeWorkspace
 ) {
 }

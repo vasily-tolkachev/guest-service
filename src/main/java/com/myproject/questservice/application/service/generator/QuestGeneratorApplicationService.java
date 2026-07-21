@@ -25,6 +25,9 @@ import com.myproject.questservice.domain.generator.QuestStage;
 import com.myproject.questservice.domain.generator.StageRevision;
 import com.myproject.questservice.domain.generator.StageStatus;
 import com.myproject.questservice.domain.generator.StageType;
+import com.myproject.questservice.domain.generator.NodeWorkspace;
+import com.myproject.questservice.domain.generator.WorkspaceAction;
+import com.myproject.questservice.domain.generator.WorkspaceNode;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -602,6 +605,14 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             stage.setStatus(StageStatus.NOT_STARTED);
         }
 
+        JsonNode workspaceNode = snapshotNode.path("nodeWorkspace");
+        if (workspaceNode != null && !workspaceNode.isMissingNode() && !workspaceNode.isNull()) {
+            NodeWorkspace importedWorkspace = objectMapper.convertValue(workspaceNode, NodeWorkspace.class);
+            project.setNodeWorkspace(importedWorkspace == null ? NodeWorkspace.createEmpty() : importedWorkspace);
+        } else {
+            project.setNodeWorkspace(NodeWorkspace.createEmpty());
+        }
+
         projectRepository.save(project);
         return toView(project);
     }
@@ -733,9 +744,151 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         throw new NotImplementedException("DSL conversion is disabled for JSON-only pipeline");
     }
 
+    @Override
+    public QuestProjectView createWorkspaceNode(UUID projectId, String sourceNodeId, String sourceActionId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        String nodeId = "N" + workspace.getNextNodeIndex();
+        workspace.setNextNodeIndex(workspace.getNextNodeIndex() + 1);
+
+        WorkspaceNode node = WorkspaceNode.create(
+                nodeId,
+                normalizeNullable(sourceNodeId),
+                normalizeNullable(sourceActionId)
+        );
+        workspace.getNodes().add(node);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView getWorkspaceNode(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        findWorkspaceNode(requiredWorkspace(project), nodeId);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView listWorkspaceNodes(UUID projectId) {
+        QuestProject project = getRequiredProject(projectId);
+        requiredWorkspace(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView updateWorkspaceNodeDescription(UUID projectId, String nodeId, String description) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        node.setDescription(description == null ? "" : description.trim());
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView addWorkspaceNodeAction(UUID projectId, String nodeId, String text) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+
+        String normalizedText = text == null ? "" : text.trim();
+        if (normalizedText.isBlank()) {
+            throw new BadRequestException("Action text is required");
+        }
+        String actionId = "A" + workspace.getNextActionIndex();
+        workspace.setNextActionIndex(workspace.getNextActionIndex() + 1);
+        node.getActions().add(new WorkspaceAction(actionId, normalizedText));
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView updateWorkspaceNodeAction(UUID projectId, String nodeId, String actionId, String text) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        WorkspaceAction action = findWorkspaceAction(node, actionId);
+
+        String normalizedText = text == null ? "" : text.trim();
+        if (normalizedText.isBlank()) {
+            throw new BadRequestException("Action text is required");
+        }
+        action.setText(normalizedText);
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode sourceNode = findWorkspaceNode(workspace, nodeId);
+        findWorkspaceAction(sourceNode, actionId);
+
+        String nextNodeId = "N" + workspace.getNextNodeIndex();
+        workspace.setNextNodeIndex(workspace.getNextNodeIndex() + 1);
+        workspace.getNodes().add(WorkspaceNode.create(nextNodeId, sourceNode.getId(), actionId));
+        projectRepository.save(project);
+        return toView(project);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));
+    }
+
+    private NodeWorkspace requiredWorkspace(QuestProject project) {
+        if (project.getNodeWorkspace() == null) {
+            project.setNodeWorkspace(NodeWorkspace.createEmpty());
+        }
+        NodeWorkspace workspace = project.getNodeWorkspace();
+        if (workspace.getNodes() == null) {
+            workspace.setNodes(new ArrayList<>());
+        }
+        if (workspace.getGlobalKnowledge() == null) {
+            workspace.setGlobalKnowledge(new ArrayList<>());
+        }
+        if (workspace.getExpansionSuggestions() == null) {
+            workspace.setExpansionSuggestions(new ArrayList<>());
+        }
+        if (workspace.getNextNodeIndex() <= 0) {
+            workspace.setNextNodeIndex(1);
+        }
+        if (workspace.getNextActionIndex() <= 0) {
+            workspace.setNextActionIndex(1);
+        }
+        return workspace;
+    }
+
+    private WorkspaceNode findWorkspaceNode(NodeWorkspace workspace, String nodeId) {
+        if (nodeId == null || nodeId.isBlank()) {
+            throw new BadRequestException("nodeId is required");
+        }
+        return workspace.getNodes().stream()
+                .filter(node -> nodeId.equalsIgnoreCase(node.getId()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Node not found: " + nodeId));
+    }
+
+    private WorkspaceAction findWorkspaceAction(WorkspaceNode node, String actionId) {
+        if (actionId == null || actionId.isBlank()) {
+            throw new BadRequestException("actionId is required");
+        }
+        return node.getActions().stream()
+                .filter(action -> actionId.equalsIgnoreCase(action.getId()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Action not found: " + actionId));
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isBlank() ? null : normalized;
     }
 
     private QuestStage getRequiredStage(QuestProject project, StageType type) {
@@ -824,6 +977,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             stagesArray.add(stageNode);
         }
         root.set("stages", stagesArray);
+        root.set("nodeWorkspace", objectMapper.valueToTree(requiredWorkspace(project)));
         return root;
     }
 
@@ -843,7 +997,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 project.getName(),
                 project.getQuestStyle(),
                 project.getStatus().name(),
-                stages
+                stages,
+                objectMapper.convertValue(requiredWorkspace(project), Object.class)
         );
     }
 

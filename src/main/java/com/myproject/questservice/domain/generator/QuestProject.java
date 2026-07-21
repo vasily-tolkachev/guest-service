@@ -17,13 +17,22 @@ public class QuestProject {
     private String questStyle;
     private QuestProjectStatus status;
     private List<QuestStage> stages;
+    private NodeWorkspace nodeWorkspace;
 
-    public QuestProject(UUID id, String name, String questStyle, QuestProjectStatus status, List<QuestStage> stages) {
+    public QuestProject(
+            UUID id,
+            String name,
+            String questStyle,
+            QuestProjectStatus status,
+            List<QuestStage> stages,
+            NodeWorkspace nodeWorkspace
+    ) {
         this.id = id;
         this.name = name;
         this.questStyle = questStyle;
         this.status = status;
         this.stages = stages;
+        this.nodeWorkspace = nodeWorkspace;
     }
 
     public static QuestProject create(String name, String questStyle) {
@@ -45,7 +54,14 @@ public class QuestProject {
             StageStatus status = i == 0 ? StageStatus.READY : StageStatus.NOT_STARTED;
             stages.add(new QuestStage(type, status, false, null));
         }
-        return new QuestProject(UUID.randomUUID(), name, questStyle, QuestProjectStatus.ACTIVE, stages);
+        return new QuestProject(
+                UUID.randomUUID(),
+                name,
+                questStyle,
+                QuestProjectStatus.ACTIVE,
+                stages,
+                NodeWorkspace.createEmpty()
+        );
     }
 
     public Optional<QuestStage> findStage(StageType type) {
