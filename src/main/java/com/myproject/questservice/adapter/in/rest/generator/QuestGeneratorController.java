@@ -3,6 +3,7 @@ package com.myproject.questservice.adapter.in.rest.generator;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ConvertDslRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.CreateProjectRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.CreateWorkspaceNodeRequest;
+import com.myproject.questservice.adapter.in.rest.dto.generator.AddGlobalKnowledgeRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpdateWorkspaceNodeDescriptionRequest;
@@ -244,5 +245,29 @@ public class QuestGeneratorController {
     @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-actions")
     public QuestProjectView generateWorkspaceNodeActions(@PathVariable UUID id, @PathVariable String nodeId) {
         return questGeneratorUseCase.generateWorkspaceNodeActions(id, nodeId);
+    }
+
+    @GetMapping("/{id}/node-workspace/global-knowledge")
+    public QuestProjectView getWorkspaceGlobalKnowledge(@PathVariable UUID id) {
+        return questGeneratorUseCase.getWorkspaceGlobalKnowledge(id);
+    }
+
+    @PostMapping("/{id}/node-workspace/global-knowledge")
+    public QuestProjectView addWorkspaceGlobalKnowledge(
+            @PathVariable UUID id,
+            @RequestBody(required = false) AddGlobalKnowledgeRequest request
+    ) {
+        String text = request == null ? "" : request.text();
+        return questGeneratorUseCase.addWorkspaceGlobalKnowledge(id, text);
+    }
+
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/knowledge/add-to-global")
+    public QuestProjectView addNodeKnowledgeToGlobal(
+            @PathVariable UUID id,
+            @PathVariable String nodeId,
+            @RequestBody(required = false) AddGlobalKnowledgeRequest request
+    ) {
+        String text = request == null ? "" : request.text();
+        return questGeneratorUseCase.addNodeKnowledgeToGlobal(id, nodeId, text);
     }
 }

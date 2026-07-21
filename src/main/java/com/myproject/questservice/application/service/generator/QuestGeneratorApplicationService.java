@@ -988,6 +988,44 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return toView(project);
     }
 
+    @Override
+    public QuestProjectView addWorkspaceGlobalKnowledge(UUID projectId, String text) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        String normalized = normalizeKnowledgeText(text);
+        if (workspace.getGlobalKnowledge().stream().noneMatch(item -> item.equalsIgnoreCase(normalized))) {
+            workspace.getGlobalKnowledge().add(normalized);
+        }
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView addNodeKnowledgeToGlobal(UUID projectId, String nodeId, String text) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        String normalized = normalizeKnowledgeText(text);
+        boolean existsInDraft = node.getExtractedKnowledgeDraft().stream()
+                .anyMatch(item -> item.equalsIgnoreCase(normalized));
+        if (!existsInDraft) {
+            throw new NotFoundException("Knowledge item not found in node draft");
+        }
+        if (workspace.getGlobalKnowledge().stream().noneMatch(item -> item.equalsIgnoreCase(normalized))) {
+            workspace.getGlobalKnowledge().add(normalized);
+        }
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView getWorkspaceGlobalKnowledge(UUID projectId) {
+        QuestProject project = getRequiredProject(projectId);
+        requiredWorkspace(project);
+        return toView(project);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));
@@ -1056,6 +1094,14 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
         String normalized = value.trim();
         return normalized.isBlank() ? null : normalized;
+    }
+
+    private String normalizeKnowledgeText(String text) {
+        String normalized = text == null ? "" : text.trim();
+        if (normalized.isBlank()) {
+            throw new BadRequestException("Knowledge text is required");
+        }
+        return normalized;
     }
 
     private QuestStage getRequiredStage(QuestProject project, StageType type) {
