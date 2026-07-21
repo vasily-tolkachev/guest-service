@@ -1375,7 +1375,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 }
                 Description rules:
                 - action_description: 1-3 short sentences describing what player does now
-                - state_description: 2-5 short sentences describing resulting state after action
+                - state_description: 2-5 short sentences describing resulting state after action, this state should not describe anything that realated to this specific periond of time, what player see, so that the player can back to this scene again and again.
                 - both parts concrete, atmospheric, interactive
                 - no branching logic, no action list
                 """;
