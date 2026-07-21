@@ -57,4 +57,10 @@ public interface QuestGeneratorUseCase {
     QuestProjectView updateWorkspaceNodeAction(UUID projectId, String nodeId, String actionId, String text);
 
     QuestProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId);
+
+    QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId);
+
+    QuestProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId);
+
+    QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId);
 }

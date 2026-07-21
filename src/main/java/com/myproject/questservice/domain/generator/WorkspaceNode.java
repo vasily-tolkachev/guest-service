@@ -16,9 +16,12 @@ public class WorkspaceNode {
     private String sourceNodeId;
     private String sourceActionId;
     private Instant updatedAt;
+    private String generatedDescriptionDraft;
+    private List<String> extractedKnowledgeDraft;
+    private List<String> generatedActionsDraft;
 
     public WorkspaceNode() {
-        this("", "", new ArrayList<>(), null, null, Instant.now());
+        this("", "", new ArrayList<>(), null, null, Instant.now(), "", new ArrayList<>(), new ArrayList<>());
     }
 
     public WorkspaceNode(
@@ -27,7 +30,10 @@ public class WorkspaceNode {
             List<WorkspaceAction> actions,
             String sourceNodeId,
             String sourceActionId,
-            Instant updatedAt
+            Instant updatedAt,
+            String generatedDescriptionDraft,
+            List<String> extractedKnowledgeDraft,
+            List<String> generatedActionsDraft
     ) {
         this.id = id;
         this.description = description;
@@ -35,9 +41,22 @@ public class WorkspaceNode {
         this.sourceNodeId = sourceNodeId;
         this.sourceActionId = sourceActionId;
         this.updatedAt = updatedAt;
+        this.generatedDescriptionDraft = generatedDescriptionDraft;
+        this.extractedKnowledgeDraft = extractedKnowledgeDraft;
+        this.generatedActionsDraft = generatedActionsDraft;
     }
 
     public static WorkspaceNode create(String id, String sourceNodeId, String sourceActionId) {
-        return new WorkspaceNode(id, "", new ArrayList<>(), sourceNodeId, sourceActionId, Instant.now());
+        return new WorkspaceNode(
+                id,
+                "",
+                new ArrayList<>(),
+                sourceNodeId,
+                sourceActionId,
+                Instant.now(),
+                "",
+                new ArrayList<>(),
+                new ArrayList<>()
+        );
     }
 }

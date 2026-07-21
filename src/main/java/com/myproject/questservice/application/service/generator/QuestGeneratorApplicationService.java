@@ -10,6 +10,7 @@ import com.myproject.questservice.application.service.BadRequestException;
 import com.myproject.questservice.application.service.ConflictException;
 import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.application.service.NotImplementedException;
+import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.application.service.generator.stage.StageRunner;
 import com.myproject.questservice.application.service.generator.stage.StageRunnerRegistry;
 import com.myproject.questservice.application.service.generator.stage.StepStageRunner;
@@ -46,15 +47,18 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private final ProjectRepository projectRepository;
     private final StageRunnerRegistry stageRunnerRegistry;
     private final ObjectMapper objectMapper;
+    private final AiClient aiClient;
 
     public QuestGeneratorApplicationService(
             ProjectRepository projectRepository,
             StageRunnerRegistry stageRunnerRegistry,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AiClient aiClient
     ) {
         this.projectRepository = projectRepository;
         this.stageRunnerRegistry = stageRunnerRegistry;
         this.objectMapper = objectMapper;
+        this.aiClient = aiClient;
     }
 
     @Override
@@ -835,6 +839,155 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return toView(project);
     }
 
+    @Override
+    public QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+
+        JsonNode generated = aiClient.generate(
+                """
+                You are a text quest scene writer.
+                Return valid JSON only.
+                All text values must be in Russian.
+                Output schema:
+                {
+                  "description": ""
+                }
+                Description rules:
+                - 3-6 short sentences
+                - concrete, atmospheric, interactive
+                - no branching logic, no action list
+                """,
+                """
+                Project:
+                - name: %s
+                - style: %s
+
+                Node:
+                - id: %s
+                - source_node_id: %s
+                - source_action_id: %s
+
+                Write one scene description for this node.
+                """.formatted(
+                        project.getName(),
+                        project.getQuestStyle(),
+                        node.getId(),
+                        node.getSourceNodeId() == null ? "" : node.getSourceNodeId(),
+                        node.getSourceActionId() == null ? "" : node.getSourceActionId()
+                )
+        );
+        String description = generated.path("description").asText("").trim();
+        if (description.isBlank()) {
+            throw new ConflictException("AI generated empty description");
+        }
+        node.setGeneratedDescriptionDraft(description);
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        if (description.isBlank()) {
+            throw new ConflictException("Node description is empty");
+        }
+
+        JsonNode generated = aiClient.generate(
+                """
+                You extract world knowledge facts from a quest scene description.
+                Return valid JSON only.
+                All text values must be in Russian.
+                Output schema:
+                {
+                  "knowledge": ["", ""]
+                }
+                Rules:
+                - each item is one short factual statement
+                - no assumptions beyond given text
+                - no duplicates
+                """,
+                """
+                Node description:
+                %s
+
+                Extract factual world knowledge list.
+                """.formatted(description)
+        );
+        node.setExtractedKnowledgeDraft(readStringArray(generated.path("knowledge")));
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        if (description.isBlank()) {
+            throw new ConflictException("Node description is empty");
+        }
+
+        JsonNode generated = aiClient.generate(
+                """
+                You generate player actions for one quest node.
+                Return valid JSON only.
+                All text values must be in Russian.
+                Output schema:
+                {
+                  "actions": [
+                    { "text": "" }
+                  ]
+                }
+                Rules:
+                - 3-6 short actionable options
+                - each option starts with a verb
+                - avoid duplicates and vague options
+                """,
+                """
+                Node description:
+                %s
+
+                Global knowledge:
+                %s
+
+                Existing node actions:
+                %s
+
+                Generate candidate actions for this node.
+                """.formatted(
+                        description,
+                        workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString(),
+                        node.getActions().stream().map(WorkspaceAction::getText).toList()
+                )
+        );
+
+        List<String> draftActions = new ArrayList<>();
+        JsonNode actionsNode = generated.path("actions");
+        if (actionsNode.isArray()) {
+            for (JsonNode item : actionsNode) {
+                String text = item.path("text").asText("").trim();
+                if (!text.isBlank()) {
+                    draftActions.add(text);
+                }
+            }
+        }
+        if (draftActions.isEmpty()) {
+            draftActions = readStringArray(generated.path("actions"));
+        }
+        node.setGeneratedActionsDraft(draftActions);
+        node.setUpdatedAt(Instant.now());
+        projectRepository.save(project);
+        return toView(project);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));
@@ -847,6 +1000,20 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         NodeWorkspace workspace = project.getNodeWorkspace();
         if (workspace.getNodes() == null) {
             workspace.setNodes(new ArrayList<>());
+        }
+        for (WorkspaceNode node : workspace.getNodes()) {
+            if (node.getActions() == null) {
+                node.setActions(new ArrayList<>());
+            }
+            if (node.getGeneratedDescriptionDraft() == null) {
+                node.setGeneratedDescriptionDraft("");
+            }
+            if (node.getExtractedKnowledgeDraft() == null) {
+                node.setExtractedKnowledgeDraft(new ArrayList<>());
+            }
+            if (node.getGeneratedActionsDraft() == null) {
+                node.setGeneratedActionsDraft(new ArrayList<>());
+            }
         }
         if (workspace.getGlobalKnowledge() == null) {
             workspace.setGlobalKnowledge(new ArrayList<>());

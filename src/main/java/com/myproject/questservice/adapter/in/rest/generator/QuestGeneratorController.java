@@ -230,4 +230,19 @@ public class QuestGeneratorController {
     ) {
         return questGeneratorUseCase.createNextWorkspaceNode(id, nodeId, actionId);
     }
+
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-description")
+    public QuestProjectView generateWorkspaceNodeDescription(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.generateWorkspaceNodeDescription(id, nodeId);
+    }
+
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/extract-knowledge")
+    public QuestProjectView extractWorkspaceNodeKnowledge(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.extractWorkspaceNodeKnowledge(id, nodeId);
+    }
+
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-actions")
+    public QuestProjectView generateWorkspaceNodeActions(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.generateWorkspaceNodeActions(id, nodeId);
+    }
 }
