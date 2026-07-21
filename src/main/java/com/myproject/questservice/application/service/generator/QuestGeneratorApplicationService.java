@@ -848,7 +848,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
 
-        StagePromptPreview preview = buildWorkspaceDescriptionPreview(project, node);
+        StagePromptPreview preview = buildWorkspaceDescriptionPreview(project, workspace, node);
         String systemPrompt = preview.systemPrompt();
         String userPrompt = preview.userPrompt();
         logAiRequest(workspace, "GENERATE_DESCRIPTION", node.getId(), systemPrompt, userPrompt);
@@ -960,8 +960,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     @Override
     public StagePromptPreview previewWorkspaceNodeDescriptionPrompt(UUID projectId, String nodeId) {
         QuestProject project = getRequiredProject(projectId);
-        WorkspaceNode node = findWorkspaceNode(requiredWorkspace(project), nodeId);
-        return buildWorkspaceDescriptionPreview(project, node);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        return buildWorkspaceDescriptionPreview(project, workspace, node);
     }
 
     @Override
@@ -1250,7 +1251,27 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return result;
     }
 
-    private StagePromptPreview buildWorkspaceDescriptionPreview(QuestProject project, WorkspaceNode node) {
+    private StagePromptPreview buildWorkspaceDescriptionPreview(QuestProject project, NodeWorkspace workspace, WorkspaceNode node) {
+        WorkspaceNode sourceNode = null;
+        if (node.getSourceNodeId() != null && !node.getSourceNodeId().isBlank()) {
+            sourceNode = workspace.getNodes().stream()
+                    .filter(candidate -> node.getSourceNodeId().equalsIgnoreCase(candidate.getId()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        String sourceDescription = sourceNode == null || sourceNode.getDescription() == null
+                ? ""
+                : sourceNode.getDescription().trim();
+
+        String selectedActionText = "";
+        if (sourceNode != null && node.getSourceActionId() != null && !node.getSourceActionId().isBlank()) {
+            selectedActionText = sourceNode.getActions().stream()
+                    .filter(action -> node.getSourceActionId().equalsIgnoreCase(action.getId()))
+                    .map(WorkspaceAction::getText)
+                    .findFirst()
+                    .orElse("");
+        }
+
         String systemPrompt = """
                 You are a text quest scene writer.
                 Return valid JSON only.
@@ -1274,13 +1295,25 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - source_node_id: %s
                 - source_action_id: %s
 
+                Previous node description:
+                %s
+
+                Chosen action from previous node:
+                %s
+
+                Global knowledge:
+                %s
+
                 Write one scene description for this node.
                 """.formatted(
                 project.getName(),
                 project.getQuestStyle(),
                 node.getId(),
                 node.getSourceNodeId() == null ? "" : node.getSourceNodeId(),
-                node.getSourceActionId() == null ? "" : node.getSourceActionId()
+                node.getSourceActionId() == null ? "" : node.getSourceActionId(),
+                sourceDescription.isBlank() ? "(none)" : sourceDescription,
+                selectedActionText.isBlank() ? "(none)" : selectedActionText,
+                workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString()
         );
         return new StagePromptPreview(systemPrompt, userPrompt);
     }
