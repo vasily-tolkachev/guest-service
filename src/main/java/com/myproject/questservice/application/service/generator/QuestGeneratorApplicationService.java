@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.UUID;
 
@@ -783,11 +784,15 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView updateWorkspaceNodeDescription(UUID projectId, String nodeId, String description) {
+    public QuestProjectView updateWorkspaceNodeDescription(UUID projectId, String nodeId, String actionDescription, String stateDescription) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
-        node.setDescription(description == null ? "" : description.trim());
+        String action = actionDescription == null ? "" : actionDescription.trim();
+        String state = stateDescription == null ? "" : stateDescription.trim();
+        node.setActionDescription(action);
+        node.setStateDescription(state);
+        node.setDescription(joinNodeDescription(action, state));
         node.setUpdatedAt(Instant.now());
         projectRepository.save(project);
         return toView(project);
@@ -843,6 +848,21 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public QuestProjectView deleteWorkspaceNode(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode root = findWorkspaceNode(workspace, nodeId);
+
+        Set<String> idsToDelete = collectNodeSubtreeIds(workspace, root.getId());
+        workspace.getNodes().removeIf(node -> idsToDelete.contains(node.getId()));
+        workspace.getExpansionSuggestions().removeIf(suggestion -> idsToDelete.contains(suggestion.getNodeId()));
+        workspace.getAiRequests().removeIf(request -> request.getNodeId() != null && idsToDelete.contains(request.getNodeId()));
+
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
     public QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
@@ -854,10 +874,20 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         logAiRequest(workspace, "GENERATE_DESCRIPTION", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         String description = generated.path("description").asText("").trim();
-        if (description.isBlank()) {
+        String actionDescription = generated.path("action_description").asText("").trim();
+        String stateDescription = generated.path("state_description").asText("").trim();
+        if (actionDescription.isBlank() && stateDescription.isBlank() && description.isBlank()) {
             throw new ConflictException("AI generated empty description");
         }
         node.setGeneratedDescriptionDraft(description);
+        if (actionDescription.isBlank() && !description.isBlank()) {
+            actionDescription = description;
+        }
+        if (stateDescription.isBlank() && !description.isBlank()) {
+            stateDescription = description;
+        }
+        node.setGeneratedActionDescriptionDraft(actionDescription);
+        node.setGeneratedStateDescriptionDraft(stateDescription);
         node.setUpdatedAt(Instant.now());
         projectRepository.save(project);
         return toView(project);
@@ -868,12 +898,14 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
-        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        String actionDescription = node.getActionDescription() == null ? "" : node.getActionDescription().trim();
+        String stateDescription = node.getStateDescription() == null ? "" : node.getStateDescription().trim();
+        String description = joinNodeDescription(actionDescription, stateDescription);
         if (description.isBlank()) {
             throw new ConflictException("Node description is empty");
         }
 
-        StagePromptPreview preview = buildWorkspaceKnowledgePreview(description);
+        StagePromptPreview preview = buildWorkspaceKnowledgePreview(actionDescription, stateDescription);
         String systemPrompt = preview.systemPrompt();
         String userPrompt = preview.userPrompt();
         logAiRequest(workspace, "EXTRACT_KNOWLEDGE", node.getId(), systemPrompt, userPrompt);
@@ -889,12 +921,14 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
-        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        String actionDescription = node.getActionDescription() == null ? "" : node.getActionDescription().trim();
+        String stateDescription = node.getStateDescription() == null ? "" : node.getStateDescription().trim();
+        String description = joinNodeDescription(actionDescription, stateDescription);
         if (description.isBlank()) {
             throw new ConflictException("Node description is empty");
         }
 
-        StagePromptPreview preview = buildWorkspaceActionsPreview(node, workspace, description);
+        StagePromptPreview preview = buildWorkspaceActionsPreview(node, workspace, actionDescription, stateDescription);
         String systemPrompt = preview.systemPrompt();
         String userPrompt = preview.userPrompt();
         logAiRequest(workspace, "GENERATE_ACTIONS", node.getId(), systemPrompt, userPrompt);
@@ -926,6 +960,19 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         String normalized = normalizeKnowledgeText(text);
         if (workspace.getGlobalKnowledge().stream().noneMatch(item -> item.equalsIgnoreCase(normalized))) {
             workspace.getGlobalKnowledge().add(normalized);
+        }
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView removeWorkspaceGlobalKnowledge(UUID projectId, String text) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        String normalized = normalizeKnowledgeText(text);
+        boolean removed = workspace.getGlobalKnowledge().removeIf(item -> item.equalsIgnoreCase(normalized));
+        if (!removed) {
+            throw new NotFoundException("Global knowledge item not found");
         }
         projectRepository.save(project);
         return toView(project);
@@ -969,11 +1016,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     public StagePromptPreview previewWorkspaceNodeKnowledgePrompt(UUID projectId, String nodeId) {
         QuestProject project = getRequiredProject(projectId);
         WorkspaceNode node = findWorkspaceNode(requiredWorkspace(project), nodeId);
-        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        String actionDescription = node.getActionDescription() == null ? "" : node.getActionDescription().trim();
+        String stateDescription = node.getStateDescription() == null ? "" : node.getStateDescription().trim();
+        String description = joinNodeDescription(actionDescription, stateDescription);
         if (description.isBlank()) {
             throw new ConflictException("Node description is empty");
         }
-        return buildWorkspaceKnowledgePreview(description);
+        return buildWorkspaceKnowledgePreview(actionDescription, stateDescription);
     }
 
     @Override
@@ -981,11 +1030,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
-        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        String actionDescription = node.getActionDescription() == null ? "" : node.getActionDescription().trim();
+        String stateDescription = node.getStateDescription() == null ? "" : node.getStateDescription().trim();
+        String description = joinNodeDescription(actionDescription, stateDescription);
         if (description.isBlank()) {
             throw new ConflictException("Node description is empty");
         }
-        return buildWorkspaceActionsPreview(node, workspace, description);
+        return buildWorkspaceActionsPreview(node, workspace, actionDescription, stateDescription);
     }
 
     @Override
@@ -998,7 +1049,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
 
         for (WorkspaceNode node : workspace.getNodes()) {
-            String description = node.getDescription() == null ? "" : node.getDescription().trim();
+            String actionDescription = node.getActionDescription() == null ? "" : node.getActionDescription().trim();
+            String stateDescription = node.getStateDescription() == null ? "" : node.getStateDescription().trim();
+            String description = joinNodeDescription(actionDescription, stateDescription);
             if (description.isBlank()) {
                 continue;
             }
@@ -1129,8 +1182,25 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             if (node.getActions() == null) {
                 node.setActions(new ArrayList<>());
             }
+            if (node.getActionDescription() == null) {
+                node.setActionDescription("");
+            }
+            if (node.getStateDescription() == null) {
+                node.setStateDescription("");
+            }
+            if ((node.getActionDescription().isBlank() && node.getStateDescription().isBlank())
+                    && node.getDescription() != null && !node.getDescription().isBlank()) {
+                node.setStateDescription(node.getDescription().trim());
+            }
+            node.setDescription(joinNodeDescription(node.getActionDescription(), node.getStateDescription()));
             if (node.getGeneratedDescriptionDraft() == null) {
                 node.setGeneratedDescriptionDraft("");
+            }
+            if (node.getGeneratedActionDescriptionDraft() == null) {
+                node.setGeneratedActionDescriptionDraft("");
+            }
+            if (node.getGeneratedStateDescriptionDraft() == null) {
+                node.setGeneratedStateDescriptionDraft("");
             }
             if (node.getExtractedKnowledgeDraft() == null) {
                 node.setExtractedKnowledgeDraft(new ArrayList<>());
@@ -1222,6 +1292,25 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return normalized;
     }
 
+    private Set<String> collectNodeSubtreeIds(NodeWorkspace workspace, String rootNodeId) {
+        Set<String> result = new HashSet<>();
+        LinkedList<String> queue = new LinkedList<>();
+        queue.add(rootNodeId);
+        while (!queue.isEmpty()) {
+            String current = queue.removeFirst();
+            if (!result.add(current)) {
+                continue;
+            }
+            for (WorkspaceNode node : workspace.getNodes()) {
+                String parentId = node.getSourceNodeId();
+                if (parentId != null && parentId.equalsIgnoreCase(current)) {
+                    queue.add(node.getId());
+                }
+            }
+        }
+        return result;
+    }
+
     private List<String> normalizeKnowledgeScope(NodeWorkspace workspace, List<String> knowledge) {
         if (knowledge == null || knowledge.isEmpty()) {
             return new ArrayList<>(workspace.getGlobalKnowledge());
@@ -1259,9 +1348,12 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                     .findFirst()
                     .orElse(null);
         }
-        String sourceDescription = sourceNode == null || sourceNode.getDescription() == null
+        String sourceActionDescription = sourceNode == null || sourceNode.getActionDescription() == null
                 ? ""
-                : sourceNode.getDescription().trim();
+                : sourceNode.getActionDescription().trim();
+        String sourceStateDescription = sourceNode == null || sourceNode.getStateDescription() == null
+                ? ""
+                : sourceNode.getStateDescription().trim();
 
         String selectedActionText = "";
         if (sourceNode != null && node.getSourceActionId() != null && !node.getSourceActionId().isBlank()) {
@@ -1278,11 +1370,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 All text values must be in Russian.
                 Output schema:
                 {
-                  "description": ""
+                  "action_description": "",
+                  "state_description": ""
                 }
                 Description rules:
-                - 3-6 short sentences
-                - concrete, atmospheric, interactive
+                - action_description: 1-3 short sentences describing what player does now
+                - state_description: 2-5 short sentences describing resulting state after action
+                - both parts concrete, atmospheric, interactive
                 - no branching logic, no action list
                 """;
         String userPrompt = """
@@ -1295,30 +1389,34 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - source_node_id: %s
                 - source_action_id: %s
 
-                Previous node description:
+                Previous node action_description:
                 %s
 
-                Chosen action from previous node:
+                Previous node state_description:
+                %s
+
+                Chosen action text from previous node:
                 %s
 
                 Global knowledge:
                 %s
 
-                Write one scene description for this node.
+                Write both action_description and state_description for this node.
                 """.formatted(
                 project.getName(),
                 project.getQuestStyle(),
                 node.getId(),
                 node.getSourceNodeId() == null ? "" : node.getSourceNodeId(),
                 node.getSourceActionId() == null ? "" : node.getSourceActionId(),
-                sourceDescription.isBlank() ? "(none)" : sourceDescription,
+                sourceActionDescription.isBlank() ? "(none)" : sourceActionDescription,
+                sourceStateDescription.isBlank() ? "(none)" : sourceStateDescription,
                 selectedActionText.isBlank() ? "(none)" : selectedActionText,
                 workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString()
         );
         return new StagePromptPreview(systemPrompt, userPrompt);
     }
 
-    private StagePromptPreview buildWorkspaceKnowledgePreview(String description) {
+    private StagePromptPreview buildWorkspaceKnowledgePreview(String actionDescription, String stateDescription) {
         String systemPrompt = """
                 You extract world knowledge facts from a quest scene description.
                 Return valid JSON only.
@@ -1333,15 +1431,21 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - no duplicates
                 """;
         String userPrompt = """
-                Node description:
+                Node action_description:
+                %s
+
+                Node state_description:
                 %s
 
                 Extract factual world knowledge list.
-                """.formatted(description);
+                """.formatted(
+                actionDescription.isBlank() ? "(none)" : actionDescription,
+                stateDescription.isBlank() ? "(none)" : stateDescription
+        );
         return new StagePromptPreview(systemPrompt, userPrompt);
     }
 
-    private StagePromptPreview buildWorkspaceActionsPreview(WorkspaceNode node, NodeWorkspace workspace, String description) {
+    private StagePromptPreview buildWorkspaceActionsPreview(WorkspaceNode node, NodeWorkspace workspace, String actionDescription, String stateDescription) {
         String systemPrompt = """
                 You generate player actions for one quest node.
                 Return valid JSON only.
@@ -1358,7 +1462,10 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - avoid duplicates and vague options
                 """;
         String userPrompt = """
-                Node description:
+                Node action_description:
+                %s
+
+                Node state_description:
                 %s
 
                 Global knowledge:
@@ -1369,11 +1476,24 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
                 Generate candidate actions for this node.
                 """.formatted(
-                description,
+                actionDescription.isBlank() ? "(none)" : actionDescription,
+                stateDescription.isBlank() ? "(none)" : stateDescription,
                 workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString(),
                 node.getActions().stream().map(WorkspaceAction::getText).toList()
         );
         return new StagePromptPreview(systemPrompt, userPrompt);
+    }
+
+    private String joinNodeDescription(String actionDescription, String stateDescription) {
+        String action = actionDescription == null ? "" : actionDescription.trim();
+        String state = stateDescription == null ? "" : stateDescription.trim();
+        if (action.isBlank()) {
+            return state;
+        }
+        if (state.isBlank()) {
+            return action;
+        }
+        return action + "\n\n" + state;
     }
 
     private QuestStage getRequiredStage(QuestProject project, StageType type) {

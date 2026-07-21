@@ -6,6 +6,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.CreateWorkspaceN
 import com.myproject.questservice.adapter.in.rest.dto.generator.AddGlobalKnowledgeRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
+import com.myproject.questservice.adapter.in.rest.dto.generator.RemoveGlobalKnowledgeRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.RunExpansionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpdateWorkspaceNodeDescriptionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceActionRequest;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -199,8 +201,9 @@ public class QuestGeneratorController {
             @PathVariable String nodeId,
             @RequestBody(required = false) UpdateWorkspaceNodeDescriptionRequest request
     ) {
-        String description = request == null ? "" : request.description();
-        return questGeneratorUseCase.updateWorkspaceNodeDescription(id, nodeId, description);
+        String actionDescription = request == null ? "" : request.actionDescription();
+        String stateDescription = request == null ? "" : request.stateDescription();
+        return questGeneratorUseCase.updateWorkspaceNodeDescription(id, nodeId, actionDescription, stateDescription);
     }
 
     @PostMapping("/{id}/node-workspace/nodes/{nodeId}/actions")
@@ -231,6 +234,11 @@ public class QuestGeneratorController {
             @PathVariable String actionId
     ) {
         return questGeneratorUseCase.createNextWorkspaceNode(id, nodeId, actionId);
+    }
+
+    @DeleteMapping("/{id}/node-workspace/nodes/{nodeId}")
+    public QuestProjectView deleteWorkspaceNode(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.deleteWorkspaceNode(id, nodeId);
     }
 
     @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-description")
@@ -275,6 +283,15 @@ public class QuestGeneratorController {
     ) {
         String text = request == null ? "" : request.text();
         return questGeneratorUseCase.addWorkspaceGlobalKnowledge(id, text);
+    }
+
+    @PostMapping("/{id}/node-workspace/global-knowledge/remove")
+    public QuestProjectView removeWorkspaceGlobalKnowledge(
+            @PathVariable UUID id,
+            @RequestBody(required = false) RemoveGlobalKnowledgeRequest request
+    ) {
+        String text = request == null ? "" : request.text();
+        return questGeneratorUseCase.removeWorkspaceGlobalKnowledge(id, text);
     }
 
     @PostMapping("/{id}/node-workspace/nodes/{nodeId}/knowledge/add-to-global")
