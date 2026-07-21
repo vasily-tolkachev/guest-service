@@ -6,6 +6,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.CreateWorkspaceN
 import com.myproject.questservice.adapter.in.rest.dto.generator.AddGlobalKnowledgeRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
+import com.myproject.questservice.adapter.in.rest.dto.generator.RunExpansionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpdateWorkspaceNodeDescriptionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceActionRequest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -269,5 +270,23 @@ public class QuestGeneratorController {
     ) {
         String text = request == null ? "" : request.text();
         return questGeneratorUseCase.addNodeKnowledgeToGlobal(id, nodeId, text);
+    }
+
+    @PostMapping("/{id}/node-workspace/run-expansion")
+    public QuestProjectView runWorkspaceExpansion(
+            @PathVariable UUID id,
+            @RequestBody(required = false) RunExpansionRequest request
+    ) {
+        return questGeneratorUseCase.runWorkspaceExpansion(id, request == null ? null : request.knowledge());
+    }
+
+    @PostMapping("/{id}/node-workspace/expansion/{suggestionId}/accept")
+    public QuestProjectView acceptWorkspaceExpansionSuggestion(@PathVariable UUID id, @PathVariable String suggestionId) {
+        return questGeneratorUseCase.acceptWorkspaceExpansionSuggestion(id, suggestionId);
+    }
+
+    @PostMapping("/{id}/node-workspace/expansion/{suggestionId}/dismiss")
+    public QuestProjectView dismissWorkspaceExpansionSuggestion(@PathVariable UUID id, @PathVariable String suggestionId) {
+        return questGeneratorUseCase.dismissWorkspaceExpansionSuggestion(id, suggestionId);
     }
 }

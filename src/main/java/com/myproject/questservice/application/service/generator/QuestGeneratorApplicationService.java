@@ -28,6 +28,7 @@ import com.myproject.questservice.domain.generator.StageStatus;
 import com.myproject.questservice.domain.generator.StageType;
 import com.myproject.questservice.domain.generator.NodeWorkspace;
 import com.myproject.questservice.domain.generator.WorkspaceAction;
+import com.myproject.questservice.domain.generator.WorkspaceExpansionSuggestion;
 import com.myproject.questservice.domain.generator.WorkspaceNode;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +39,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -1026,6 +1028,130 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         return toView(project);
     }
 
+    @Override
+    public QuestProjectView runWorkspaceExpansion(UUID projectId, List<String> knowledge) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        List<String> scopedKnowledge = normalizeKnowledgeScope(workspace, knowledge);
+        if (scopedKnowledge.isEmpty()) {
+            throw new ConflictException("No knowledge provided for expansion");
+        }
+
+        for (WorkspaceNode node : workspace.getNodes()) {
+            String description = node.getDescription() == null ? "" : node.getDescription().trim();
+            if (description.isBlank()) {
+                continue;
+            }
+            JsonNode generated = aiClient.generate(
+                    """
+                    You decide if new world knowledge unlocks new player actions for one quest node.
+                    Return valid JSON only.
+                    All text values must be in Russian.
+                    Output schema:
+                    {
+                      "has_new_actions": true,
+                      "suggestions": [
+                        { "action_text": "", "reason": "" }
+                      ]
+                    }
+                    Rules:
+                    - Suggest only truly new actions.
+                    - Avoid duplicates against existing actions.
+                    - 0-3 suggestions max.
+                    """,
+                    """
+                    Node id: %s
+                    Node description:
+                    %s
+
+                    Existing actions:
+                    %s
+
+                    New knowledge:
+                    %s
+                    """.formatted(
+                            node.getId(),
+                            description,
+                            node.getActions().stream().map(WorkspaceAction::getText).toList(),
+                            scopedKnowledge
+                    )
+            );
+
+            boolean hasNew = generated.path("has_new_actions").asBoolean(false);
+            JsonNode suggestionsNode = generated.path("suggestions");
+            if (!hasNew || !suggestionsNode.isArray()) {
+                continue;
+            }
+            for (JsonNode suggestionNode : suggestionsNode) {
+                String actionText = suggestionNode.path("action_text").asText("").trim();
+                String reason = suggestionNode.path("reason").asText("").trim();
+                if (actionText.isBlank()) {
+                    continue;
+                }
+                boolean existsAction = node.getActions().stream()
+                        .anyMatch(action -> action.getText() != null && action.getText().equalsIgnoreCase(actionText));
+                if (existsAction) {
+                    continue;
+                }
+                boolean existsPending = workspace.getExpansionSuggestions().stream()
+                        .anyMatch(s -> "PENDING".equalsIgnoreCase(s.getStatus())
+                                && node.getId().equalsIgnoreCase(s.getNodeId())
+                                && actionText.equalsIgnoreCase(s.getActionText()));
+                if (existsPending) {
+                    continue;
+                }
+                String suggestionId = "E" + workspace.getNextSuggestionIndex();
+                workspace.setNextSuggestionIndex(workspace.getNextSuggestionIndex() + 1);
+                workspace.getExpansionSuggestions().add(new WorkspaceExpansionSuggestion(
+                        suggestionId,
+                        node.getId(),
+                        actionText,
+                        reason,
+                        "PENDING",
+                        new ArrayList<>(scopedKnowledge)
+                ));
+            }
+        }
+
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView acceptWorkspaceExpansionSuggestion(UUID projectId, String suggestionId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceExpansionSuggestion suggestion = findExpansionSuggestion(workspace, suggestionId);
+        if (!"PENDING".equalsIgnoreCase(suggestion.getStatus())) {
+            throw new ConflictException("Suggestion is not pending: " + suggestionId);
+        }
+        WorkspaceNode node = findWorkspaceNode(workspace, suggestion.getNodeId());
+        boolean exists = node.getActions().stream()
+                .anyMatch(action -> action.getText() != null && action.getText().equalsIgnoreCase(suggestion.getActionText()));
+        if (!exists) {
+            String actionId = "A" + workspace.getNextActionIndex();
+            workspace.setNextActionIndex(workspace.getNextActionIndex() + 1);
+            node.getActions().add(new WorkspaceAction(actionId, suggestion.getActionText()));
+            node.setUpdatedAt(Instant.now());
+        }
+        suggestion.setStatus("ACCEPTED");
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public QuestProjectView dismissWorkspaceExpansionSuggestion(UUID projectId, String suggestionId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceExpansionSuggestion suggestion = findExpansionSuggestion(workspace, suggestionId);
+        if (!"PENDING".equalsIgnoreCase(suggestion.getStatus())) {
+            throw new ConflictException("Suggestion is not pending: " + suggestionId);
+        }
+        suggestion.setStatus("DISMISSED");
+        projectRepository.save(project);
+        return toView(project);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));
@@ -1065,6 +1191,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (workspace.getNextActionIndex() <= 0) {
             workspace.setNextActionIndex(1);
         }
+        if (workspace.getNextSuggestionIndex() <= 0) {
+            workspace.setNextSuggestionIndex(1);
+        }
         return workspace;
     }
 
@@ -1088,6 +1217,16 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 .orElseThrow(() -> new NotFoundException("Action not found: " + actionId));
     }
 
+    private WorkspaceExpansionSuggestion findExpansionSuggestion(NodeWorkspace workspace, String suggestionId) {
+        if (suggestionId == null || suggestionId.isBlank()) {
+            throw new BadRequestException("suggestionId is required");
+        }
+        return workspace.getExpansionSuggestions().stream()
+                .filter(s -> suggestionId.equalsIgnoreCase(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Expansion suggestion not found: " + suggestionId));
+    }
+
     private String normalizeNullable(String value) {
         if (value == null) {
             return null;
@@ -1102,6 +1241,35 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             throw new BadRequestException("Knowledge text is required");
         }
         return normalized;
+    }
+
+    private List<String> normalizeKnowledgeScope(NodeWorkspace workspace, List<String> knowledge) {
+        if (knowledge == null || knowledge.isEmpty()) {
+            return new ArrayList<>(workspace.getGlobalKnowledge());
+        }
+        Set<String> requested = new LinkedHashSet<>();
+        for (String item : knowledge) {
+            if (item == null) {
+                continue;
+            }
+            String normalized = item.trim();
+            if (!normalized.isBlank()) {
+                requested.add(normalized);
+            }
+        }
+        if (requested.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> result = new ArrayList<>();
+        for (String global : workspace.getGlobalKnowledge()) {
+            for (String requestedItem : requested) {
+                if (global.equalsIgnoreCase(requestedItem)) {
+                    result.add(global);
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     private QuestStage getRequiredStage(QuestProject project, StageType type) {

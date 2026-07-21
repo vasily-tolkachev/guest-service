@@ -69,4 +69,10 @@ public interface QuestGeneratorUseCase {
     QuestProjectView addNodeKnowledgeToGlobal(UUID projectId, String nodeId, String text);
 
     QuestProjectView getWorkspaceGlobalKnowledge(UUID projectId);
+
+    QuestProjectView runWorkspaceExpansion(UUID projectId, List<String> knowledge);
+
+    QuestProjectView acceptWorkspaceExpansionSuggestion(UUID projectId, String suggestionId);
+
+    QuestProjectView dismissWorkspaceExpansionSuggestion(UUID projectId, String suggestionId);
 }

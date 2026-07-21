@@ -11,29 +11,32 @@ import java.util.List;
 public class NodeWorkspace {
     private List<WorkspaceNode> nodes;
     private List<String> globalKnowledge;
-    private List<String> expansionSuggestions;
+    private List<WorkspaceExpansionSuggestion> expansionSuggestions;
     private int nextNodeIndex;
     private int nextActionIndex;
+    private int nextSuggestionIndex;
 
     public NodeWorkspace() {
-        this(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 1, 1);
+        this(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 1, 1, 1);
     }
 
     public NodeWorkspace(
             List<WorkspaceNode> nodes,
             List<String> globalKnowledge,
-            List<String> expansionSuggestions,
+            List<WorkspaceExpansionSuggestion> expansionSuggestions,
             int nextNodeIndex,
-            int nextActionIndex
+            int nextActionIndex,
+            int nextSuggestionIndex
     ) {
         this.nodes = nodes;
         this.globalKnowledge = globalKnowledge;
         this.expansionSuggestions = expansionSuggestions;
         this.nextNodeIndex = nextNodeIndex;
         this.nextActionIndex = nextActionIndex;
+        this.nextSuggestionIndex = nextSuggestionIndex;
     }
 
     public static NodeWorkspace createEmpty() {
-        return new NodeWorkspace(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 1, 1);
+        return new NodeWorkspace(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 1, 1, 1);
     }
 }
