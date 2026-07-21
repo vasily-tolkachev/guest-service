@@ -28,6 +28,7 @@ import com.myproject.questservice.domain.generator.StageStatus;
 import com.myproject.questservice.domain.generator.StageType;
 import com.myproject.questservice.domain.generator.NodeWorkspace;
 import com.myproject.questservice.domain.generator.WorkspaceAction;
+import com.myproject.questservice.domain.generator.WorkspaceAiRequestLog;
 import com.myproject.questservice.domain.generator.WorkspaceExpansionSuggestion;
 import com.myproject.questservice.domain.generator.WorkspaceNode;
 import org.springframework.stereotype.Service;
@@ -847,39 +848,11 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
 
-        JsonNode generated = aiClient.generate(
-                """
-                You are a text quest scene writer.
-                Return valid JSON only.
-                All text values must be in Russian.
-                Output schema:
-                {
-                  "description": ""
-                }
-                Description rules:
-                - 3-6 short sentences
-                - concrete, atmospheric, interactive
-                - no branching logic, no action list
-                """,
-                """
-                Project:
-                - name: %s
-                - style: %s
-
-                Node:
-                - id: %s
-                - source_node_id: %s
-                - source_action_id: %s
-
-                Write one scene description for this node.
-                """.formatted(
-                        project.getName(),
-                        project.getQuestStyle(),
-                        node.getId(),
-                        node.getSourceNodeId() == null ? "" : node.getSourceNodeId(),
-                        node.getSourceActionId() == null ? "" : node.getSourceActionId()
-                )
-        );
+        StagePromptPreview preview = buildWorkspaceDescriptionPreview(project, node);
+        String systemPrompt = preview.systemPrompt();
+        String userPrompt = preview.userPrompt();
+        logAiRequest(workspace, "GENERATE_DESCRIPTION", node.getId(), systemPrompt, userPrompt);
+        JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         String description = generated.path("description").asText("").trim();
         if (description.isBlank()) {
             throw new ConflictException("AI generated empty description");
@@ -900,27 +873,11 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             throw new ConflictException("Node description is empty");
         }
 
-        JsonNode generated = aiClient.generate(
-                """
-                You extract world knowledge facts from a quest scene description.
-                Return valid JSON only.
-                All text values must be in Russian.
-                Output schema:
-                {
-                  "knowledge": ["", ""]
-                }
-                Rules:
-                - each item is one short factual statement
-                - no assumptions beyond given text
-                - no duplicates
-                """,
-                """
-                Node description:
-                %s
-
-                Extract factual world knowledge list.
-                """.formatted(description)
-        );
+        StagePromptPreview preview = buildWorkspaceKnowledgePreview(description);
+        String systemPrompt = preview.systemPrompt();
+        String userPrompt = preview.userPrompt();
+        logAiRequest(workspace, "EXTRACT_KNOWLEDGE", node.getId(), systemPrompt, userPrompt);
+        JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         node.setExtractedKnowledgeDraft(readStringArray(generated.path("knowledge")));
         node.setUpdatedAt(Instant.now());
         projectRepository.save(project);
@@ -937,39 +894,11 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             throw new ConflictException("Node description is empty");
         }
 
-        JsonNode generated = aiClient.generate(
-                """
-                You generate player actions for one quest node.
-                Return valid JSON only.
-                All text values must be in Russian.
-                Output schema:
-                {
-                  "actions": [
-                    { "text": "" }
-                  ]
-                }
-                Rules:
-                - 3-6 short actionable options
-                - each option starts with a verb
-                - avoid duplicates and vague options
-                """,
-                """
-                Node description:
-                %s
-
-                Global knowledge:
-                %s
-
-                Existing node actions:
-                %s
-
-                Generate candidate actions for this node.
-                """.formatted(
-                        description,
-                        workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString(),
-                        node.getActions().stream().map(WorkspaceAction::getText).toList()
-                )
-        );
+        StagePromptPreview preview = buildWorkspaceActionsPreview(node, workspace, description);
+        String systemPrompt = preview.systemPrompt();
+        String userPrompt = preview.userPrompt();
+        logAiRequest(workspace, "GENERATE_ACTIONS", node.getId(), systemPrompt, userPrompt);
+        JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
 
         List<String> draftActions = new ArrayList<>();
         JsonNode actionsNode = generated.path("actions");
@@ -1029,6 +958,36 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public StagePromptPreview previewWorkspaceNodeDescriptionPrompt(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        WorkspaceNode node = findWorkspaceNode(requiredWorkspace(project), nodeId);
+        return buildWorkspaceDescriptionPreview(project, node);
+    }
+
+    @Override
+    public StagePromptPreview previewWorkspaceNodeKnowledgePrompt(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        WorkspaceNode node = findWorkspaceNode(requiredWorkspace(project), nodeId);
+        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        if (description.isBlank()) {
+            throw new ConflictException("Node description is empty");
+        }
+        return buildWorkspaceKnowledgePreview(description);
+    }
+
+    @Override
+    public StagePromptPreview previewWorkspaceNodeActionsPrompt(UUID projectId, String nodeId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        String description = node.getDescription() == null ? "" : node.getDescription().trim();
+        if (description.isBlank()) {
+            throw new ConflictException("Node description is empty");
+        }
+        return buildWorkspaceActionsPreview(node, workspace, description);
+    }
+
+    @Override
     public QuestProjectView runWorkspaceExpansion(UUID projectId, List<String> knowledge) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
@@ -1042,8 +1001,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             if (description.isBlank()) {
                 continue;
             }
-            JsonNode generated = aiClient.generate(
-                    """
+            String systemPrompt = """
                     You decide if new world knowledge unlocks new player actions for one quest node.
                     Return valid JSON only.
                     All text values must be in Russian.
@@ -1058,8 +1016,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                     - Suggest only truly new actions.
                     - Avoid duplicates against existing actions.
                     - 0-3 suggestions max.
-                    """,
-                    """
+                    """;
+            String userPrompt = """
                     Node id: %s
                     Node description:
                     %s
@@ -1074,8 +1032,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                             description,
                             node.getActions().stream().map(WorkspaceAction::getText).toList(),
                             scopedKnowledge
-                    )
-            );
+                    );
+            logAiRequest(workspace, "RUN_EXPANSION", node.getId(), systemPrompt, userPrompt);
+            JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
 
             boolean hasNew = generated.path("has_new_actions").asBoolean(false);
             JsonNode suggestionsNode = generated.path("suggestions");
@@ -1185,6 +1144,9 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (workspace.getExpansionSuggestions() == null) {
             workspace.setExpansionSuggestions(new ArrayList<>());
         }
+        if (workspace.getAiRequests() == null) {
+            workspace.setAiRequests(new ArrayList<>());
+        }
         if (workspace.getNextNodeIndex() <= 0) {
             workspace.setNextNodeIndex(1);
         }
@@ -1194,7 +1156,23 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (workspace.getNextSuggestionIndex() <= 0) {
             workspace.setNextSuggestionIndex(1);
         }
+        if (workspace.getNextAiRequestIndex() <= 0) {
+            workspace.setNextAiRequestIndex(1);
+        }
         return workspace;
+    }
+
+    private void logAiRequest(NodeWorkspace workspace, String stage, String nodeId, String systemPrompt, String userPrompt) {
+        String requestId = "R" + workspace.getNextAiRequestIndex();
+        workspace.setNextAiRequestIndex(workspace.getNextAiRequestIndex() + 1);
+        workspace.getAiRequests().add(new WorkspaceAiRequestLog(
+                requestId,
+                stage,
+                nodeId,
+                systemPrompt,
+                userPrompt,
+                Instant.now()
+        ));
     }
 
     private WorkspaceNode findWorkspaceNode(NodeWorkspace workspace, String nodeId) {
@@ -1270,6 +1248,99 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return result;
+    }
+
+    private StagePromptPreview buildWorkspaceDescriptionPreview(QuestProject project, WorkspaceNode node) {
+        String systemPrompt = """
+                You are a text quest scene writer.
+                Return valid JSON only.
+                All text values must be in Russian.
+                Output schema:
+                {
+                  "description": ""
+                }
+                Description rules:
+                - 3-6 short sentences
+                - concrete, atmospheric, interactive
+                - no branching logic, no action list
+                """;
+        String userPrompt = """
+                Project:
+                - name: %s
+                - style: %s
+
+                Node:
+                - id: %s
+                - source_node_id: %s
+                - source_action_id: %s
+
+                Write one scene description for this node.
+                """.formatted(
+                project.getName(),
+                project.getQuestStyle(),
+                node.getId(),
+                node.getSourceNodeId() == null ? "" : node.getSourceNodeId(),
+                node.getSourceActionId() == null ? "" : node.getSourceActionId()
+        );
+        return new StagePromptPreview(systemPrompt, userPrompt);
+    }
+
+    private StagePromptPreview buildWorkspaceKnowledgePreview(String description) {
+        String systemPrompt = """
+                You extract world knowledge facts from a quest scene description.
+                Return valid JSON only.
+                All text values must be in Russian.
+                Output schema:
+                {
+                  "knowledge": ["", ""]
+                }
+                Rules:
+                - each item is one short factual statement
+                - no assumptions beyond given text
+                - no duplicates
+                """;
+        String userPrompt = """
+                Node description:
+                %s
+
+                Extract factual world knowledge list.
+                """.formatted(description);
+        return new StagePromptPreview(systemPrompt, userPrompt);
+    }
+
+    private StagePromptPreview buildWorkspaceActionsPreview(WorkspaceNode node, NodeWorkspace workspace, String description) {
+        String systemPrompt = """
+                You generate player actions for one quest node.
+                Return valid JSON only.
+                All text values must be in Russian.
+                Output schema:
+                {
+                  "actions": [
+                    { "text": "" }
+                  ]
+                }
+                Rules:
+                - 3-6 short actionable options
+                - each option starts with a verb
+                - avoid duplicates and vague options
+                """;
+        String userPrompt = """
+                Node description:
+                %s
+
+                Global knowledge:
+                %s
+
+                Existing node actions:
+                %s
+
+                Generate candidate actions for this node.
+                """.formatted(
+                description,
+                workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString(),
+                node.getActions().stream().map(WorkspaceAction::getText).toList()
+        );
+        return new StagePromptPreview(systemPrompt, userPrompt);
     }
 
     private QuestStage getRequiredStage(QuestProject project, StageType type) {

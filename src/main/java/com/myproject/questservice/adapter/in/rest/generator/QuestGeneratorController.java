@@ -238,14 +238,29 @@ public class QuestGeneratorController {
         return questGeneratorUseCase.generateWorkspaceNodeDescription(id, nodeId);
     }
 
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-description/preview")
+    public StagePromptPreview previewWorkspaceNodeDescriptionPrompt(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.previewWorkspaceNodeDescriptionPrompt(id, nodeId);
+    }
+
     @PostMapping("/{id}/node-workspace/nodes/{nodeId}/extract-knowledge")
     public QuestProjectView extractWorkspaceNodeKnowledge(@PathVariable UUID id, @PathVariable String nodeId) {
         return questGeneratorUseCase.extractWorkspaceNodeKnowledge(id, nodeId);
     }
 
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/extract-knowledge/preview")
+    public StagePromptPreview previewWorkspaceNodeKnowledgePrompt(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.previewWorkspaceNodeKnowledgePrompt(id, nodeId);
+    }
+
     @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-actions")
     public QuestProjectView generateWorkspaceNodeActions(@PathVariable UUID id, @PathVariable String nodeId) {
         return questGeneratorUseCase.generateWorkspaceNodeActions(id, nodeId);
+    }
+
+    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-actions/preview")
+    public StagePromptPreview previewWorkspaceNodeActionsPrompt(@PathVariable UUID id, @PathVariable String nodeId) {
+        return questGeneratorUseCase.previewWorkspaceNodeActionsPrompt(id, nodeId);
     }
 
     @GetMapping("/{id}/node-workspace/global-knowledge")

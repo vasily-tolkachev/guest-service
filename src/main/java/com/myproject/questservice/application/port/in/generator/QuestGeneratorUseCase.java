@@ -64,6 +64,12 @@ public interface QuestGeneratorUseCase {
 
     QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId);
 
+    StagePromptPreview previewWorkspaceNodeDescriptionPrompt(UUID projectId, String nodeId);
+
+    StagePromptPreview previewWorkspaceNodeKnowledgePrompt(UUID projectId, String nodeId);
+
+    StagePromptPreview previewWorkspaceNodeActionsPrompt(UUID projectId, String nodeId);
+
     QuestProjectView addWorkspaceGlobalKnowledge(UUID projectId, String text);
 
     QuestProjectView addNodeKnowledgeToGlobal(UUID projectId, String nodeId, String text);
