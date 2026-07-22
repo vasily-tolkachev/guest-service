@@ -6,6 +6,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.RemoveGlobalKnow
 import com.myproject.questservice.adapter.in.rest.dto.generator.RunExpansionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpdateWorkspaceNodeDescriptionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceActionRequest;
+import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.CreateNodeGeneratorProjectRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.ImportNodeGeneratorJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
@@ -203,5 +204,10 @@ public class NodeGeneratorController {
     @PostMapping("/import-json")
     public NodeGeneratorProjectView importProjectJson(@Valid @RequestBody ImportNodeGeneratorJsonRequest request) {
         return nodeGeneratorUseCase.importProjectJson(request.snapshotJson());
+    }
+
+    @PostMapping("/{id}/create-quest")
+    public UploadQuestResponse createQuestFromProject(@PathVariable UUID id) {
+        return nodeGeneratorUseCase.createQuestFromProject(id);
     }
 }

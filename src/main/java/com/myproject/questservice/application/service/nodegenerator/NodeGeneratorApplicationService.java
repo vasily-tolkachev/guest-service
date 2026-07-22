@@ -2,34 +2,48 @@ package com.myproject.questservice.application.service.nodegenerator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
 import com.myproject.questservice.application.port.in.nodegenerator.NodeGeneratorUseCase;
 import com.myproject.questservice.application.service.BadRequestException;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.service.QuestImportService;
 import com.myproject.questservice.application.service.generator.ProjectRepository;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 import com.myproject.questservice.domain.generator.NodeWorkspace;
+import com.myproject.questservice.domain.generator.WorkspaceAction;
+import com.myproject.questservice.domain.generator.WorkspaceNode;
 import com.myproject.questservice.domain.generator.QuestProject;
 import com.myproject.questservice.domain.generator.QuestProjectStatus;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     private final ProjectRepository projectRepository;
     private final QuestGeneratorUseCase questGeneratorUseCase;
+    private final QuestImportService questImportService;
     private final ObjectMapper objectMapper;
 
     public NodeGeneratorApplicationService(
             ProjectRepository projectRepository,
             QuestGeneratorUseCase questGeneratorUseCase,
+            QuestImportService questImportService,
             ObjectMapper objectMapper
     ) {
         this.projectRepository = projectRepository;
         this.questGeneratorUseCase = questGeneratorUseCase;
+        this.questImportService = questImportService;
         this.objectMapper = objectMapper;
     }
 
@@ -274,6 +288,17 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         return toView(project);
     }
 
+    @Override
+    public UploadQuestResponse createQuestFromProject(UUID projectId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        if (workspace.getNodes() == null || workspace.getNodes().isEmpty()) {
+            throw new BadRequestException("Project has no scenes to build a quest");
+        }
+        String dsl = toQuestDsl(project, workspace);
+        return questImportService.uploadQuest(dsl);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));
@@ -294,5 +319,227 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 project.getStatus().name(),
                 objectMapper.convertValue(requiredWorkspace(project), Object.class)
         );
+    }
+
+    private String toQuestDsl(QuestProject project, NodeWorkspace workspace) {
+        List<WorkspaceNode> sourceNodes = workspace.getNodes() == null ? List.of() : workspace.getNodes();
+        if (sourceNodes.isEmpty()) {
+            throw new BadRequestException("Project has no scenes to build a quest");
+        }
+
+        Map<String, String> nodeIdMap = buildNodeIdMap(sourceNodes);
+        String startSourceNodeId = resolveStartSourceNodeId(sourceNodes);
+        List<WorkspaceNode> orderedNodes = orderNodes(sourceNodes, startSourceNodeId);
+        Map<String, WorkspaceNode> nodeBySourceId = indexNodesBySourceId(sourceNodes);
+        Map<String, String> edgeBySourceAndAction = indexEdgesBySourceAndAction(sourceNodes, nodeIdMap);
+
+        String questId = toQuestId(project.getName(), project.getId());
+        String title = normalizeTitle(project.getName());
+        StringBuilder dsl = new StringBuilder();
+        dsl.append("quest ").append(questId).append("\n\n");
+        dsl.append("title ").append(quote(title)).append("\n\n");
+
+        for (int i = 0; i < orderedNodes.size(); i++) {
+            WorkspaceNode node = orderedNodes.get(i);
+            String sourceNodeId = node.getId() == null ? "" : node.getId();
+            String dslNodeId = nodeIdMap.getOrDefault(sourceNodeId.toUpperCase(Locale.ROOT), toNodeId(sourceNodeId, i + 1));
+            dsl.append("node ").append(dslNodeId).append("\n");
+            dsl.append(normalizeNodeText(node, dslNodeId)).append("\n");
+
+            List<WorkspaceAction> actions = node.getActions() == null ? List.of() : node.getActions();
+            for (int actionIndex = 0; actionIndex < actions.size(); actionIndex++) {
+                WorkspaceAction action = actions.get(actionIndex);
+                String actionId = action.getId() == null ? "" : action.getId();
+                String actionText = normalizeActionText(action, actionIndex + 1);
+                dsl.append("> ").append(actionText).append("\n");
+
+                String edgeKey = edgeKey(sourceNodeId, actionId);
+                String targetId = edgeBySourceAndAction.get(edgeKey);
+                if (targetId != null && nodeBySourceId.containsKey(targetId.toUpperCase(Locale.ROOT))) {
+                    dsl.append("-> ").append(nodeIdMap.get(targetId.toUpperCase(Locale.ROOT))).append("\n");
+                } else {
+                    dsl.append("@end\n");
+                }
+            }
+
+            if (i < orderedNodes.size() - 1) {
+                dsl.append("\n");
+            }
+        }
+        return dsl.toString();
+    }
+
+    private Map<String, String> buildNodeIdMap(List<WorkspaceNode> nodes) {
+        Map<String, String> map = new HashMap<>();
+        Set<String> used = new HashSet<>();
+        int fallbackIndex = 1;
+        for (WorkspaceNode node : nodes) {
+            String sourceId = node.getId() == null ? "" : node.getId();
+            String key = sourceId.toUpperCase(Locale.ROOT);
+            if (map.containsKey(key)) {
+                continue;
+            }
+            String candidate = toNodeId(sourceId, fallbackIndex);
+            while (used.contains(candidate.toUpperCase(Locale.ROOT))) {
+                fallbackIndex++;
+                candidate = toNodeId(sourceId, fallbackIndex);
+            }
+            map.put(key, candidate);
+            used.add(candidate.toUpperCase(Locale.ROOT));
+            fallbackIndex++;
+        }
+        return map;
+    }
+
+    private String resolveStartSourceNodeId(List<WorkspaceNode> nodes) {
+        for (WorkspaceNode node : nodes) {
+            String sourceNodeId = node.getSourceNodeId() == null ? "" : node.getSourceNodeId().trim();
+            if (sourceNodeId.isBlank()) {
+                return node.getId();
+            }
+        }
+        return nodes.getFirst().getId();
+    }
+
+    private List<WorkspaceNode> orderNodes(List<WorkspaceNode> nodes, String startSourceNodeId) {
+        List<WorkspaceNode> ordered = new ArrayList<>(nodes);
+        ordered.sort(Comparator.comparing(WorkspaceNode::getId, Comparator.nullsLast(String::compareToIgnoreCase)));
+        int startIndex = -1;
+        for (int i = 0; i < ordered.size(); i++) {
+            String id = ordered.get(i).getId();
+            if (id != null && id.equalsIgnoreCase(startSourceNodeId)) {
+                startIndex = i;
+                break;
+            }
+        }
+        if (startIndex > 0) {
+            WorkspaceNode start = ordered.remove(startIndex);
+            ordered.addFirst(start);
+        }
+        return ordered;
+    }
+
+    private Map<String, WorkspaceNode> indexNodesBySourceId(List<WorkspaceNode> nodes) {
+        Map<String, WorkspaceNode> map = new HashMap<>();
+        for (WorkspaceNode node : nodes) {
+            String nodeId = node.getId() == null ? "" : node.getId();
+            map.put(nodeId.toUpperCase(Locale.ROOT), node);
+        }
+        return map;
+    }
+
+    private Map<String, String> indexEdgesBySourceAndAction(List<WorkspaceNode> nodes, Map<String, String> nodeIdMap) {
+        Map<String, String> map = new HashMap<>();
+        for (WorkspaceNode node : nodes) {
+            String sourceNodeId = node.getSourceNodeId() == null ? "" : node.getSourceNodeId().trim();
+            String sourceActionId = node.getSourceActionId() == null ? "" : node.getSourceActionId().trim();
+            if (sourceNodeId.isBlank() || sourceActionId.isBlank()) {
+                continue;
+            }
+            String targetSourceNodeId = node.getId() == null ? "" : node.getId().trim();
+            if (targetSourceNodeId.isBlank()) {
+                continue;
+            }
+            if (!nodeIdMap.containsKey(targetSourceNodeId.toUpperCase(Locale.ROOT))) {
+                continue;
+            }
+            map.putIfAbsent(edgeKey(sourceNodeId, sourceActionId), targetSourceNodeId);
+        }
+        return map;
+    }
+
+    private String normalizeNodeText(WorkspaceNode node, String fallbackNodeId) {
+        String state = trimToEmpty(node.getStateDescription());
+        String action = trimToEmpty(node.getActionDescription());
+        String legacy = trimToEmpty(node.getDescription());
+        if (!state.isBlank()) {
+            return state;
+        }
+        if (!action.isBlank()) {
+            return action;
+        }
+        if (!legacy.isBlank()) {
+            return legacy;
+        }
+        return "Сцена " + fallbackNodeId;
+    }
+
+    private String normalizeActionText(WorkspaceAction action, int fallbackIndex) {
+        String text = action == null ? "" : trimToEmpty(action.getText());
+        if (!text.isBlank()) {
+            return text;
+        }
+        return "Действие " + fallbackIndex;
+    }
+
+    private String toQuestId(String name, UUID projectId) {
+        String slug = slugify(name);
+        if (slug.isBlank()) {
+            slug = "quest";
+        }
+        String suffix = projectId.toString().replace("-", "").substring(0, 8);
+        String candidate = slug + "_" + suffix;
+        if (!Character.isLetter(candidate.charAt(0)) && candidate.charAt(0) != '_') {
+            candidate = "q_" + candidate;
+        }
+        return candidate;
+    }
+
+    private String toNodeId(String sourceId, int fallbackIndex) {
+        String slug = slugify(sourceId);
+        if (slug.isBlank()) {
+            slug = "node_" + fallbackIndex;
+        }
+        if (!Character.isLetter(slug.charAt(0)) && slug.charAt(0) != '_') {
+            slug = "n_" + slug;
+        }
+        return slug;
+    }
+
+    private String normalizeTitle(String name) {
+        String title = trimToEmpty(name);
+        if (title.isBlank()) {
+            return "Новый квест";
+        }
+        return title;
+    }
+
+    private String quote(String value) {
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private String edgeKey(String sourceNodeId, String sourceActionId) {
+        return sourceNodeId.trim().toUpperCase(Locale.ROOT) + "::" + sourceActionId.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String slugify(String value) {
+        String raw = trimToEmpty(value).toLowerCase(Locale.ROOT);
+        StringBuilder out = new StringBuilder();
+        boolean lastDash = false;
+        for (int i = 0; i < raw.length(); i++) {
+            char ch = raw.charAt(i);
+            boolean allowed = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+            if (allowed) {
+                out.append(ch);
+                lastDash = false;
+                continue;
+            }
+            if (!lastDash) {
+                out.append('_');
+                lastDash = true;
+            }
+        }
+        String slug = out.toString();
+        while (slug.startsWith("_")) {
+            slug = slug.substring(1);
+        }
+        while (slug.endsWith("_")) {
+            slug = slug.substring(0, slug.length() - 1);
+        }
+        return slug;
     }
 }
