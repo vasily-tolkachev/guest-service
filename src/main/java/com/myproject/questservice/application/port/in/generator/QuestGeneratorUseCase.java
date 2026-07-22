@@ -59,11 +59,11 @@ public interface QuestGeneratorUseCase {
     QuestProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId);
     QuestProjectView deleteWorkspaceNode(UUID projectId, String nodeId);
 
-    QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId);
+    QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride);
 
-    QuestProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId);
+    QuestProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride);
 
-    QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId);
+    QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride);
 
     StagePromptPreview previewWorkspaceNodeDescriptionPrompt(UUID projectId, String nodeId);
 

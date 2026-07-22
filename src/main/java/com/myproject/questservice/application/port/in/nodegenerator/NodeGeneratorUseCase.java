@@ -31,15 +31,15 @@ public interface NodeGeneratorUseCase {
 
     StagePromptPreview previewWorkspaceNodeDescriptionPrompt(UUID projectId, String nodeId);
 
-    NodeGeneratorProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId);
+    NodeGeneratorProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride);
 
     StagePromptPreview previewWorkspaceNodeKnowledgePrompt(UUID projectId, String nodeId);
 
-    NodeGeneratorProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId);
+    NodeGeneratorProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride);
 
     StagePromptPreview previewWorkspaceNodeActionsPrompt(UUID projectId, String nodeId);
 
-    NodeGeneratorProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId);
+    NodeGeneratorProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride);
 
     NodeGeneratorProjectView addWorkspaceGlobalKnowledge(UUID projectId, String text);
 

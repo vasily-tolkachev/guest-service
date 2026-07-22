@@ -116,8 +116,8 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     }
 
     @Override
-    public NodeGeneratorProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId) {
-        questGeneratorUseCase.generateWorkspaceNodeDescription(projectId, nodeId);
+    public NodeGeneratorProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride) {
+        questGeneratorUseCase.generateWorkspaceNodeDescription(projectId, nodeId, systemPromptOverride, userPromptOverride);
         return toView(getRequiredProject(projectId));
     }
 
@@ -127,8 +127,8 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     }
 
     @Override
-    public NodeGeneratorProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId) {
-        questGeneratorUseCase.extractWorkspaceNodeKnowledge(projectId, nodeId);
+    public NodeGeneratorProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride) {
+        questGeneratorUseCase.extractWorkspaceNodeKnowledge(projectId, nodeId, systemPromptOverride, userPromptOverride);
         return toView(getRequiredProject(projectId));
     }
 
@@ -138,8 +138,8 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     }
 
     @Override
-    public NodeGeneratorProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId) {
-        questGeneratorUseCase.generateWorkspaceNodeActions(projectId, nodeId);
+    public NodeGeneratorProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride) {
+        questGeneratorUseCase.generateWorkspaceNodeActions(projectId, nodeId, systemPromptOverride, userPromptOverride);
         return toView(getRequiredProject(projectId));
     }
 

@@ -9,6 +9,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceA
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.CreateNodeGeneratorProjectRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.ImportNodeGeneratorJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.PromptOverrideRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.RenameNodeGeneratorProjectRequest;
 import com.myproject.questservice.application.port.in.nodegenerator.NodeGeneratorUseCase;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
@@ -110,8 +111,14 @@ public class NodeGeneratorController {
     }
 
     @PostMapping("/{id}/nodes/{nodeId}/generate-description")
-    public NodeGeneratorProjectView generateWorkspaceNodeDescription(@PathVariable UUID id, @PathVariable String nodeId) {
-        return nodeGeneratorUseCase.generateWorkspaceNodeDescription(id, nodeId);
+    public NodeGeneratorProjectView generateWorkspaceNodeDescription(
+            @PathVariable UUID id,
+            @PathVariable String nodeId,
+            @RequestBody(required = false) PromptOverrideRequest request
+    ) {
+        String systemPrompt = request == null ? null : request.systemPrompt();
+        String userPrompt = request == null ? null : request.userPrompt();
+        return nodeGeneratorUseCase.generateWorkspaceNodeDescription(id, nodeId, systemPrompt, userPrompt);
     }
 
     @PostMapping("/{id}/nodes/{nodeId}/extract-knowledge/preview")
@@ -120,8 +127,14 @@ public class NodeGeneratorController {
     }
 
     @PostMapping("/{id}/nodes/{nodeId}/extract-knowledge")
-    public NodeGeneratorProjectView extractWorkspaceNodeKnowledge(@PathVariable UUID id, @PathVariable String nodeId) {
-        return nodeGeneratorUseCase.extractWorkspaceNodeKnowledge(id, nodeId);
+    public NodeGeneratorProjectView extractWorkspaceNodeKnowledge(
+            @PathVariable UUID id,
+            @PathVariable String nodeId,
+            @RequestBody(required = false) PromptOverrideRequest request
+    ) {
+        String systemPrompt = request == null ? null : request.systemPrompt();
+        String userPrompt = request == null ? null : request.userPrompt();
+        return nodeGeneratorUseCase.extractWorkspaceNodeKnowledge(id, nodeId, systemPrompt, userPrompt);
     }
 
     @PostMapping("/{id}/nodes/{nodeId}/generate-actions/preview")
@@ -130,8 +143,14 @@ public class NodeGeneratorController {
     }
 
     @PostMapping("/{id}/nodes/{nodeId}/generate-actions")
-    public NodeGeneratorProjectView generateWorkspaceNodeActions(@PathVariable UUID id, @PathVariable String nodeId) {
-        return nodeGeneratorUseCase.generateWorkspaceNodeActions(id, nodeId);
+    public NodeGeneratorProjectView generateWorkspaceNodeActions(
+            @PathVariable UUID id,
+            @PathVariable String nodeId,
+            @RequestBody(required = false) PromptOverrideRequest request
+    ) {
+        String systemPrompt = request == null ? null : request.systemPrompt();
+        String userPrompt = request == null ? null : request.userPrompt();
+        return nodeGeneratorUseCase.generateWorkspaceNodeActions(id, nodeId, systemPrompt, userPrompt);
     }
 
     @PostMapping("/{id}/knowledge")

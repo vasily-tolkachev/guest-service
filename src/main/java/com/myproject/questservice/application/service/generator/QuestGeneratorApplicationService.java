@@ -863,14 +863,14 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId) {
+    public QuestProjectView generateWorkspaceNodeDescription(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
 
         StagePromptPreview preview = buildWorkspaceDescriptionPreview(project, workspace, node);
-        String systemPrompt = preview.systemPrompt();
-        String userPrompt = preview.userPrompt();
+        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
+        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
         logAiRequest(workspace, "GENERATE_DESCRIPTION", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         String description = generated.path("description").asText("").trim();
@@ -894,7 +894,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId) {
+    public QuestProjectView extractWorkspaceNodeKnowledge(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
@@ -906,8 +906,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
 
         StagePromptPreview preview = buildWorkspaceKnowledgePreview(actionDescription, stateDescription);
-        String systemPrompt = preview.systemPrompt();
-        String userPrompt = preview.userPrompt();
+        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
+        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
         logAiRequest(workspace, "EXTRACT_KNOWLEDGE", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         node.setExtractedKnowledgeDraft(readStringArray(generated.path("knowledge")));
@@ -917,7 +917,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId) {
+    public QuestProjectView generateWorkspaceNodeActions(UUID projectId, String nodeId, String systemPromptOverride, String userPromptOverride) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
@@ -929,8 +929,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
 
         StagePromptPreview preview = buildWorkspaceActionsPreview(node, workspace, actionDescription, stateDescription);
-        String systemPrompt = preview.systemPrompt();
-        String userPrompt = preview.userPrompt();
+        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
+        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
         logAiRequest(workspace, "GENERATE_ACTIONS", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
 
@@ -2199,6 +2199,14 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             }
         }
         return result;
+    }
+
+    private String nonBlankOrDefault(String override, String defaultValue) {
+        if (override == null) {
+            return defaultValue;
+        }
+        String normalized = override.trim();
+        return normalized.isBlank() ? defaultValue : normalized;
     }
 
     private String toNodeId(String sceneId, String stepId) {
