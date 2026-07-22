@@ -2,14 +2,8 @@ package com.myproject.questservice.adapter.in.rest.generator;
 
 import com.myproject.questservice.adapter.in.rest.dto.generator.ConvertDslRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.CreateProjectRequest;
-import com.myproject.questservice.adapter.in.rest.dto.generator.CreateWorkspaceNodeRequest;
-import com.myproject.questservice.adapter.in.rest.dto.generator.AddGlobalKnowledgeRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
-import com.myproject.questservice.adapter.in.rest.dto.generator.RemoveGlobalKnowledgeRequest;
-import com.myproject.questservice.adapter.in.rest.dto.generator.RunExpansionRequest;
-import com.myproject.questservice.adapter.in.rest.dto.generator.UpdateWorkspaceNodeDescriptionRequest;
-import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceActionRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
@@ -19,8 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -176,149 +168,5 @@ public class QuestGeneratorController {
     @PostMapping(value = "/convert-dsl", produces = MediaType.TEXT_PLAIN_VALUE)
     public String convertDsl(@RequestBody ConvertDslRequest request) {
         return questGeneratorUseCase.convertDsl(request.projectName(), request.questGraphJson());
-    }
-
-    @GetMapping("/{id}/node-workspace/nodes")
-    public QuestProjectView listWorkspaceNodes(@PathVariable UUID id) {
-        return questGeneratorUseCase.listWorkspaceNodes(id);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes")
-    public QuestProjectView createWorkspaceNode(@PathVariable UUID id, @RequestBody(required = false) CreateWorkspaceNodeRequest request) {
-        String sourceNodeId = request == null ? null : request.sourceNodeId();
-        String sourceActionId = request == null ? null : request.sourceActionId();
-        return questGeneratorUseCase.createWorkspaceNode(id, sourceNodeId, sourceActionId);
-    }
-
-    @GetMapping("/{id}/node-workspace/nodes/{nodeId}")
-    public QuestProjectView getWorkspaceNode(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.getWorkspaceNode(id, nodeId);
-    }
-
-    @PutMapping("/{id}/node-workspace/nodes/{nodeId}/description")
-    public QuestProjectView updateWorkspaceNodeDescription(
-            @PathVariable UUID id,
-            @PathVariable String nodeId,
-            @RequestBody(required = false) UpdateWorkspaceNodeDescriptionRequest request
-    ) {
-        String actionDescription = request == null ? "" : request.actionDescription();
-        String stateDescription = request == null ? "" : request.stateDescription();
-        return questGeneratorUseCase.updateWorkspaceNodeDescription(id, nodeId, actionDescription, stateDescription);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/actions")
-    public QuestProjectView addWorkspaceNodeAction(
-            @PathVariable UUID id,
-            @PathVariable String nodeId,
-            @RequestBody(required = false) UpsertWorkspaceActionRequest request
-    ) {
-        String text = request == null ? "" : request.text();
-        return questGeneratorUseCase.addWorkspaceNodeAction(id, nodeId, text);
-    }
-
-    @PutMapping("/{id}/node-workspace/nodes/{nodeId}/actions/{actionId}")
-    public QuestProjectView updateWorkspaceNodeAction(
-            @PathVariable UUID id,
-            @PathVariable String nodeId,
-            @PathVariable String actionId,
-            @RequestBody(required = false) UpsertWorkspaceActionRequest request
-    ) {
-        String text = request == null ? "" : request.text();
-        return questGeneratorUseCase.updateWorkspaceNodeAction(id, nodeId, actionId, text);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/actions/{actionId}/create-next-node")
-    public QuestProjectView createNextWorkspaceNode(
-            @PathVariable UUID id,
-            @PathVariable String nodeId,
-            @PathVariable String actionId
-    ) {
-        return questGeneratorUseCase.createNextWorkspaceNode(id, nodeId, actionId);
-    }
-
-    @DeleteMapping("/{id}/node-workspace/nodes/{nodeId}")
-    public QuestProjectView deleteWorkspaceNode(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.deleteWorkspaceNode(id, nodeId);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-description")
-    public QuestProjectView generateWorkspaceNodeDescription(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.generateWorkspaceNodeDescription(id, nodeId);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-description/preview")
-    public StagePromptPreview previewWorkspaceNodeDescriptionPrompt(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.previewWorkspaceNodeDescriptionPrompt(id, nodeId);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/extract-knowledge")
-    public QuestProjectView extractWorkspaceNodeKnowledge(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.extractWorkspaceNodeKnowledge(id, nodeId);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/extract-knowledge/preview")
-    public StagePromptPreview previewWorkspaceNodeKnowledgePrompt(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.previewWorkspaceNodeKnowledgePrompt(id, nodeId);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-actions")
-    public QuestProjectView generateWorkspaceNodeActions(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.generateWorkspaceNodeActions(id, nodeId);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/generate-actions/preview")
-    public StagePromptPreview previewWorkspaceNodeActionsPrompt(@PathVariable UUID id, @PathVariable String nodeId) {
-        return questGeneratorUseCase.previewWorkspaceNodeActionsPrompt(id, nodeId);
-    }
-
-    @GetMapping("/{id}/node-workspace/global-knowledge")
-    public QuestProjectView getWorkspaceGlobalKnowledge(@PathVariable UUID id) {
-        return questGeneratorUseCase.getWorkspaceGlobalKnowledge(id);
-    }
-
-    @PostMapping("/{id}/node-workspace/global-knowledge")
-    public QuestProjectView addWorkspaceGlobalKnowledge(
-            @PathVariable UUID id,
-            @RequestBody(required = false) AddGlobalKnowledgeRequest request
-    ) {
-        String text = request == null ? "" : request.text();
-        return questGeneratorUseCase.addWorkspaceGlobalKnowledge(id, text);
-    }
-
-    @PostMapping("/{id}/node-workspace/global-knowledge/remove")
-    public QuestProjectView removeWorkspaceGlobalKnowledge(
-            @PathVariable UUID id,
-            @RequestBody(required = false) RemoveGlobalKnowledgeRequest request
-    ) {
-        String text = request == null ? "" : request.text();
-        return questGeneratorUseCase.removeWorkspaceGlobalKnowledge(id, text);
-    }
-
-    @PostMapping("/{id}/node-workspace/nodes/{nodeId}/knowledge/add-to-global")
-    public QuestProjectView addNodeKnowledgeToGlobal(
-            @PathVariable UUID id,
-            @PathVariable String nodeId,
-            @RequestBody(required = false) AddGlobalKnowledgeRequest request
-    ) {
-        String text = request == null ? "" : request.text();
-        return questGeneratorUseCase.addNodeKnowledgeToGlobal(id, nodeId, text);
-    }
-
-    @PostMapping("/{id}/node-workspace/run-expansion")
-    public QuestProjectView runWorkspaceExpansion(
-            @PathVariable UUID id,
-            @RequestBody(required = false) RunExpansionRequest request
-    ) {
-        return questGeneratorUseCase.runWorkspaceExpansion(id, request == null ? null : request.knowledge());
-    }
-
-    @PostMapping("/{id}/node-workspace/expansion/{suggestionId}/accept")
-    public QuestProjectView acceptWorkspaceExpansionSuggestion(@PathVariable UUID id, @PathVariable String suggestionId) {
-        return questGeneratorUseCase.acceptWorkspaceExpansionSuggestion(id, suggestionId);
-    }
-
-    @PostMapping("/{id}/node-workspace/expansion/{suggestionId}/dismiss")
-    public QuestProjectView dismissWorkspaceExpansionSuggestion(@PathVariable UUID id, @PathVariable String suggestionId) {
-        return questGeneratorUseCase.dismissWorkspaceExpansionSuggestion(id, suggestionId);
     }
 }
