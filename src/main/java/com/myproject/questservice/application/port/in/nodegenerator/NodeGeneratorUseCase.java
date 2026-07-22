@@ -2,6 +2,7 @@ package com.myproject.questservice.application.port.in.nodegenerator;
 
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.FirstSceneIdeasResponse;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 
 import java.util.List;
@@ -61,4 +62,6 @@ public interface NodeGeneratorUseCase {
     NodeGeneratorProjectView importProjectJson(Object snapshotJson);
 
     UploadQuestResponse createQuestFromProject(UUID projectId);
+
+    FirstSceneIdeasResponse generateFirstSceneIdeas(String prompt);
 }

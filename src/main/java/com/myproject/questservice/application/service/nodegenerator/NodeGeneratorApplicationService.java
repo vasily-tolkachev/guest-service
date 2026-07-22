@@ -3,9 +3,12 @@ package com.myproject.questservice.application.service.nodegenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.FirstSceneIdeaView;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.FirstSceneIdeasResponse;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
 import com.myproject.questservice.application.port.in.nodegenerator.NodeGeneratorUseCase;
+import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.application.service.BadRequestException;
 import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.application.service.QuestImportService;
@@ -33,17 +36,20 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     private final ProjectRepository projectRepository;
     private final QuestGeneratorUseCase questGeneratorUseCase;
     private final QuestImportService questImportService;
+    private final AiClient aiClient;
     private final ObjectMapper objectMapper;
 
     public NodeGeneratorApplicationService(
             ProjectRepository projectRepository,
             QuestGeneratorUseCase questGeneratorUseCase,
             QuestImportService questImportService,
+            AiClient aiClient,
             ObjectMapper objectMapper
     ) {
         this.projectRepository = projectRepository;
         this.questGeneratorUseCase = questGeneratorUseCase;
         this.questImportService = questImportService;
+        this.aiClient = aiClient;
         this.objectMapper = objectMapper;
     }
 
@@ -297,6 +303,52 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         }
         String dsl = toQuestDsl(project, workspace);
         return questImportService.uploadQuest(dsl);
+    }
+
+    @Override
+    public FirstSceneIdeasResponse generateFirstSceneIdeas(String prompt) {
+        String normalizedPrompt = prompt == null ? "" : prompt.trim();
+        String systemPrompt = """
+                Ты сценарист интерактивных квестов.
+                Сгенерируй 5 разных идей стартовой ситуации для первой сцены.
+                Верни ТОЛЬКО JSON формата:
+                {
+                  "ideas": [
+                    { "title": "Короткий заголовок", "scenarioText": "Описание стартовой ситуации (2-4 предложения)" }
+                  ]
+                }
+                Ограничения:
+                - Только русский язык.
+                - Без markdown.
+                - title: 2-8 слов.
+                - scenarioText: конкретная ситуация, без абстракций.
+                """;
+        String userPrompt = normalizedPrompt.isBlank()
+                ? "Пользователь не дал тему. Предложи универсальные идеи для приключенческого квеста."
+                : "Тема и ситуация от пользователя:\n" + normalizedPrompt;
+
+        JsonNode root = aiClient.generate(systemPrompt, userPrompt);
+        JsonNode ideasNode = root.path("ideas");
+        if (!ideasNode.isArray() || ideasNode.isEmpty()) {
+            throw new BadRequestException("AI did not return first scene ideas");
+        }
+
+        List<FirstSceneIdeaView> ideas = new ArrayList<>();
+        for (JsonNode ideaNode : ideasNode) {
+            String title = ideaNode.path("title").asText("").trim();
+            String scenarioText = ideaNode.path("scenarioText").asText("").trim();
+            if (title.isBlank() || scenarioText.isBlank()) {
+                continue;
+            }
+            ideas.add(new FirstSceneIdeaView(title, scenarioText));
+            if (ideas.size() >= 5) {
+                break;
+            }
+        }
+        if (ideas.isEmpty()) {
+            throw new BadRequestException("AI returned empty first scene ideas");
+        }
+        return new FirstSceneIdeasResponse(ideas);
     }
 
     private QuestProject getRequiredProject(UUID id) {

@@ -8,6 +8,8 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.UpdateWorkspaceN
 import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceActionRequest;
 import com.myproject.questservice.adapter.in.rest.dto.UploadQuestResponse;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.CreateNodeGeneratorProjectRequest;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.FirstSceneIdeasRequest;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.FirstSceneIdeasResponse;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.ImportNodeGeneratorJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.PromptOverrideRequest;
@@ -39,6 +41,12 @@ public class NodeGeneratorController {
     @PostMapping
     public NodeGeneratorProjectView createProject(@Valid @RequestBody CreateNodeGeneratorProjectRequest request) {
         return nodeGeneratorUseCase.createProject(request.name(), request.questStyle());
+    }
+
+    @PostMapping("/first-scene-ideas")
+    public FirstSceneIdeasResponse generateFirstSceneIdeas(@RequestBody(required = false) FirstSceneIdeasRequest request) {
+        String prompt = request == null ? "" : request.prompt();
+        return nodeGeneratorUseCase.generateFirstSceneIdeas(prompt);
     }
 
     @GetMapping
