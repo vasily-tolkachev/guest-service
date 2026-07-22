@@ -57,6 +57,24 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     }
 
     @Override
+    public NodeGeneratorProjectView renameProject(UUID id, String name) {
+        String normalizedName = name == null ? "" : name.trim();
+        if (normalizedName.isBlank()) {
+            throw new BadRequestException("Project name is required");
+        }
+        QuestProject project = getRequiredProject(id);
+        project.setName(normalizedName);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public void deleteProject(UUID id) {
+        getRequiredProject(id);
+        projectRepository.deleteById(id);
+    }
+
+    @Override
     public NodeGeneratorProjectView createWorkspaceNode(UUID projectId, String sourceNodeId, String sourceActionId) {
         questGeneratorUseCase.createWorkspaceNode(projectId, sourceNodeId, sourceActionId);
         return toView(getRequiredProject(projectId));
@@ -187,6 +205,53 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         if (!importedName.isBlank()) {
             project.setName(importedName);
         }
+        String importedQuestStyle = snapshotNode.path("questStyle").asText("").trim();
+        if (!importedQuestStyle.isBlank()) {
+            project.setQuestStyle(importedQuestStyle);
+        }
+        String importedProjectStatus = snapshotNode.path("status").asText("").trim();
+        if (!importedProjectStatus.isBlank()) {
+            try {
+                project.setStatus(QuestProjectStatus.valueOf(importedProjectStatus));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
+        JsonNode workspaceNode = snapshotNode.path("workspace");
+        if (workspaceNode == null || workspaceNode.isMissingNode() || workspaceNode.isNull()) {
+            throw new BadRequestException("snapshotJson.workspace is required");
+        }
+        NodeWorkspace workspace = objectMapper.convertValue(workspaceNode, NodeWorkspace.class);
+        project.setNodeWorkspace(workspace == null ? NodeWorkspace.createEmpty() : workspace);
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
+    public NodeGeneratorProjectView importProjectJson(Object snapshotJson) {
+        if (snapshotJson == null) {
+            throw new BadRequestException("snapshotJson is required");
+        }
+        JsonNode snapshotNode = objectMapper.valueToTree(snapshotJson);
+        if (snapshotNode == null || snapshotNode.isNull()) {
+            throw new BadRequestException("snapshotJson is required");
+        }
+
+        String importedName = snapshotNode.path("name").asText("").trim();
+        if (importedName.isBlank()) {
+            throw new BadRequestException("snapshotJson.name is required");
+        }
+
+        QuestProject project = projectRepository.findByName(importedName)
+                .orElseGet(() -> {
+                    String questStyle = snapshotNode.path("questStyle").asText("").trim();
+                    if (questStyle.isBlank()) {
+                        questStyle = "classic-adventure";
+                    }
+                    return QuestProject.create(importedName, questStyle);
+                });
+        project.setName(importedName);
+
         String importedQuestStyle = snapshotNode.path("questStyle").asText("").trim();
         if (!importedQuestStyle.isBlank()) {
             project.setQuestStyle(importedQuestStyle);

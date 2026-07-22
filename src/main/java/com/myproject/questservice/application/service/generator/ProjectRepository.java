@@ -27,5 +27,21 @@ public class ProjectRepository {
     public List<QuestProject> findAll() {
         return new ArrayList<>(projects.values());
     }
-}
 
+    public Optional<QuestProject> findByName(String name) {
+        if (name == null) {
+            return Optional.empty();
+        }
+        String normalized = name.trim();
+        if (normalized.isBlank()) {
+            return Optional.empty();
+        }
+        return projects.values().stream()
+                .filter(project -> project.getName() != null && project.getName().trim().equalsIgnoreCase(normalized))
+                .findFirst();
+    }
+
+    public void deleteById(UUID id) {
+        projects.remove(id);
+    }
+}

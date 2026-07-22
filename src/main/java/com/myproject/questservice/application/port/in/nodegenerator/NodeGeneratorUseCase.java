@@ -13,6 +13,10 @@ public interface NodeGeneratorUseCase {
 
     NodeGeneratorProjectView getProject(UUID id);
 
+    NodeGeneratorProjectView renameProject(UUID id, String name);
+
+    void deleteProject(UUID id);
+
     NodeGeneratorProjectView createWorkspaceNode(UUID projectId, String sourceNodeId, String sourceActionId);
 
     NodeGeneratorProjectView deleteWorkspaceNode(UUID projectId, String nodeId);
@@ -52,4 +56,6 @@ public interface NodeGeneratorUseCase {
     Object exportProjectJson(UUID projectId);
 
     NodeGeneratorProjectView importProjectJson(UUID projectId, Object snapshotJson);
+
+    NodeGeneratorProjectView importProjectJson(Object snapshotJson);
 }

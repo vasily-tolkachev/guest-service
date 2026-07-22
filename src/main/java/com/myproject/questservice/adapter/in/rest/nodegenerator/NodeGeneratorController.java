@@ -9,6 +9,7 @@ import com.myproject.questservice.adapter.in.rest.dto.generator.UpsertWorkspaceA
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.CreateNodeGeneratorProjectRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.ImportNodeGeneratorJsonRequest;
 import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.NodeGeneratorProjectView;
+import com.myproject.questservice.adapter.in.rest.dto.nodegenerator.RenameNodeGeneratorProjectRequest;
 import com.myproject.questservice.application.port.in.nodegenerator.NodeGeneratorUseCase;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
 import jakarta.validation.Valid;
@@ -46,6 +47,16 @@ public class NodeGeneratorController {
     @GetMapping("/{id}")
     public NodeGeneratorProjectView getProject(@PathVariable UUID id) {
         return nodeGeneratorUseCase.getProject(id);
+    }
+
+    @PutMapping("/{id}")
+    public NodeGeneratorProjectView renameProject(@PathVariable UUID id, @Valid @RequestBody RenameNodeGeneratorProjectRequest request) {
+        return nodeGeneratorUseCase.renameProject(id, request.name());
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteProject(@PathVariable UUID id) {
+        nodeGeneratorUseCase.deleteProject(id);
     }
 
     @PostMapping("/{id}/nodes")
@@ -168,5 +179,10 @@ public class NodeGeneratorController {
     @PostMapping("/{id}/import-json")
     public NodeGeneratorProjectView importProjectJson(@PathVariable UUID id, @Valid @RequestBody ImportNodeGeneratorJsonRequest request) {
         return nodeGeneratorUseCase.importProjectJson(id, request.snapshotJson());
+    }
+
+    @PostMapping("/import-json")
+    public NodeGeneratorProjectView importProjectJson(@Valid @RequestBody ImportNodeGeneratorJsonRequest request) {
+        return nodeGeneratorUseCase.importProjectJson(request.snapshotJson());
     }
 }
