@@ -14,6 +14,7 @@ import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.application.service.QuestImportService;
 import com.myproject.questservice.application.service.generator.ProjectRepository;
 import com.myproject.questservice.application.service.generator.stage.StagePromptPreview;
+import com.myproject.questservice.config.OpenAiProperties;
 import com.myproject.questservice.domain.generator.NodeWorkspace;
 import com.myproject.questservice.domain.generator.WorkspaceAction;
 import com.myproject.questservice.domain.generator.WorkspaceNode;
@@ -30,27 +31,36 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
+    private static final int SCENE_IDEAS_LIMIT = 3;
+    private static final long IDEAS_CACHE_TTL_MS = 10 * 60 * 1000;
+
     private final ProjectRepository projectRepository;
     private final QuestGeneratorUseCase questGeneratorUseCase;
     private final QuestImportService questImportService;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
+    private final OpenAiProperties openAiProperties;
+    private final ConcurrentMap<String, CachedIdeas> sceneIdeasCache = new ConcurrentHashMap<>();
 
     public NodeGeneratorApplicationService(
             ProjectRepository projectRepository,
             QuestGeneratorUseCase questGeneratorUseCase,
             QuestImportService questImportService,
             AiClient aiClient,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            OpenAiProperties openAiProperties
     ) {
         this.projectRepository = projectRepository;
         this.questGeneratorUseCase = questGeneratorUseCase;
         this.questImportService = questImportService;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
+        this.openAiProperties = openAiProperties;
     }
 
     @Override
@@ -308,9 +318,15 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     @Override
     public FirstSceneIdeasResponse generateFirstSceneIdeas(String prompt) {
         String normalizedPrompt = prompt == null ? "" : prompt.trim();
+        String cacheKey = "FIRST::" + normalizedPrompt;
+        FirstSceneIdeasResponse cached = getCachedIdeas(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
         String systemPrompt = """
                 Ты сценарист интерактивных квестов.
-                Сгенерируй 5 разных идей стартовой ситуации для первой сцены.
+                Сгенерируй 3 разных идеи стартовой ситуации для первой сцены.
                 Верни ТОЛЬКО JSON формата:
                 {
                   "ideas": [
@@ -327,28 +343,13 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 ? "Пользователь не дал тему. Предложи универсальные идеи для приключенческого квеста."
                 : "Тема и ситуация от пользователя:\n" + normalizedPrompt;
 
-        JsonNode root = aiClient.generate(systemPrompt, userPrompt);
-        JsonNode ideasNode = root.path("ideas");
-        if (!ideasNode.isArray() || ideasNode.isEmpty()) {
-            throw new BadRequestException("AI did not return first scene ideas");
-        }
-
-        List<FirstSceneIdeaView> ideas = new ArrayList<>();
-        for (JsonNode ideaNode : ideasNode) {
-            String title = ideaNode.path("title").asText("").trim();
-            String scenarioText = ideaNode.path("scenarioText").asText("").trim();
-            if (title.isBlank() || scenarioText.isBlank()) {
-                continue;
-            }
-            ideas.add(new FirstSceneIdeaView(title, scenarioText));
-            if (ideas.size() >= 5) {
-                break;
-            }
-        }
-        if (ideas.isEmpty()) {
-            throw new BadRequestException("AI returned empty first scene ideas");
-        }
-        return new FirstSceneIdeasResponse(ideas);
+        FirstSceneIdeasResponse response = parseIdeas(
+                aiClient.generate(systemPrompt, userPrompt, draftModel()),
+                "AI did not return first scene ideas",
+                "AI returned empty first scene ideas"
+        );
+        putCachedIdeas(cacheKey, response);
+        return response;
     }
 
     @Override
@@ -406,10 +407,31 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 trimToEmpty(action.getText()).isBlank() ? action.getId() : trimToEmpty(action.getText())
         );
 
-        JsonNode root = aiClient.generate(systemPrompt, userPrompt);
+        String cacheKey = "NEXT::%s::%s::%s::%s::%s".formatted(
+                projectId,
+                trimToEmpty(sourceNode.getId()),
+                trimToEmpty(action.getId()),
+                sourceDescription,
+                trimToEmpty(action.getText())
+        );
+        FirstSceneIdeasResponse cached = getCachedIdeas(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        FirstSceneIdeasResponse response = parseIdeas(
+                aiClient.generate(systemPrompt, userPrompt, draftModel()),
+                "AI did not return next scene ideas",
+                "AI returned empty next scene ideas"
+        );
+        putCachedIdeas(cacheKey, response);
+        return response;
+    }
+
+    private FirstSceneIdeasResponse parseIdeas(JsonNode root, String missingError, String emptyError) {
         JsonNode ideasNode = root.path("ideas");
         if (!ideasNode.isArray() || ideasNode.isEmpty()) {
-            throw new BadRequestException("AI did not return next scene ideas");
+            throw new BadRequestException(missingError);
         }
 
         List<FirstSceneIdeaView> ideas = new ArrayList<>();
@@ -420,14 +442,41 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 continue;
             }
             ideas.add(new FirstSceneIdeaView(title, scenarioText));
-            if (ideas.size() >= 5) {
+            if (ideas.size() >= SCENE_IDEAS_LIMIT) {
                 break;
             }
         }
         if (ideas.isEmpty()) {
-            throw new BadRequestException("AI returned empty next scene ideas");
+            throw new BadRequestException(emptyError);
         }
         return new FirstSceneIdeasResponse(ideas);
+    }
+
+    private FirstSceneIdeasResponse getCachedIdeas(String key) {
+        CachedIdeas cached = sceneIdeasCache.get(key);
+        if (cached == null) {
+            return null;
+        }
+        if (System.currentTimeMillis() > cached.expiresAtEpochMs()) {
+            sceneIdeasCache.remove(key);
+            return null;
+        }
+        return cached.response();
+    }
+
+    private void putCachedIdeas(String key, FirstSceneIdeasResponse response) {
+        sceneIdeasCache.put(key, new CachedIdeas(response, System.currentTimeMillis() + IDEAS_CACHE_TTL_MS));
+    }
+
+    private String draftModel() {
+        String model = openAiProperties.draftModel();
+        if (model == null || model.isBlank()) {
+            model = openAiProperties.model();
+        }
+        if (model == null || model.isBlank()) {
+            return "gpt-5-mini";
+        }
+        return model;
     }
 
     private QuestProject getRequiredProject(UUID id) {
@@ -672,5 +721,8 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
             slug = slug.substring(0, slug.length() - 1);
         }
         return slug;
+    }
+
+    private record CachedIdeas(FirstSceneIdeasResponse response, long expiresAtEpochMs) {
     }
 }

@@ -6,8 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record OpenAiProperties(
         String apiKey,
         String model,
+        String draftModel,
         Integer connectTimeoutMs,
         Integer readTimeoutMs
 ) {
 }
-

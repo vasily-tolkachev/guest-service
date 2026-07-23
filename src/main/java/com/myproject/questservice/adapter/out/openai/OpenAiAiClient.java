@@ -26,12 +26,19 @@ public class OpenAiAiClient implements AiClient {
 
     @Override
     public JsonNode generate(String systemPrompt, String userPrompt) {
+        return generate(systemPrompt, userPrompt, null);
+    }
+
+    @Override
+    public JsonNode generate(String systemPrompt, String userPrompt, String modelOverride) {
         String apiKey = properties.apiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new AiGenerationException("OpenAI API key is not configured");
         }
 
-        String model = properties.model() == null || properties.model().isBlank()
+        String model = modelOverride != null && !modelOverride.isBlank()
+                ? modelOverride
+                : properties.model() == null || properties.model().isBlank()
                 ? "gpt-5-mini"
                 : properties.model();
 
