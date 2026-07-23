@@ -834,6 +834,32 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
+    public QuestProjectView deleteWorkspaceNodeAction(UUID projectId, String nodeId, String actionId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+        WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
+        findWorkspaceAction(node, actionId);
+
+        node.getActions().removeIf(action -> action.getId() != null && action.getId().equalsIgnoreCase(actionId));
+        node.setUpdatedAt(Instant.now());
+
+        List<WorkspaceNode> branchRoots = workspace.getNodes().stream()
+                .filter(candidate -> candidate.getSourceNodeId() != null && candidate.getSourceActionId() != null)
+                .filter(candidate -> node.getId().equalsIgnoreCase(candidate.getSourceNodeId()) && actionId.equalsIgnoreCase(candidate.getSourceActionId()))
+                .toList();
+        Set<String> idsToDelete = new HashSet<>();
+        for (WorkspaceNode root : branchRoots) {
+            idsToDelete.addAll(collectNodeSubtreeIds(workspace, root.getId()));
+        }
+        workspace.getNodes().removeIf(candidate -> idsToDelete.contains(candidate.getId()));
+        workspace.getExpansionSuggestions().removeIf(suggestion -> idsToDelete.contains(suggestion.getNodeId()));
+        workspace.getAiRequests().removeIf(request -> request.getNodeId() != null && idsToDelete.contains(request.getNodeId()));
+
+        projectRepository.save(project);
+        return toView(project);
+    }
+
+    @Override
     public QuestProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId) {
         QuestProject project = getRequiredProject(projectId);
         NodeWorkspace workspace = requiredWorkspace(project);

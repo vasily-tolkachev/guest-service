@@ -135,6 +135,12 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     }
 
     @Override
+    public NodeGeneratorProjectView deleteWorkspaceNodeAction(UUID projectId, String nodeId, String actionId) {
+        questGeneratorUseCase.deleteWorkspaceNodeAction(projectId, nodeId, actionId);
+        return toView(getRequiredProject(projectId));
+    }
+
+    @Override
     public NodeGeneratorProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId) {
         questGeneratorUseCase.createNextWorkspaceNode(projectId, nodeId, actionId);
         return toView(getRequiredProject(projectId));

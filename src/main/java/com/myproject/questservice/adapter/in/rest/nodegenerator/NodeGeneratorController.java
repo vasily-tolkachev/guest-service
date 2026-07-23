@@ -118,6 +118,15 @@ public class NodeGeneratorController {
         return nodeGeneratorUseCase.updateWorkspaceNodeAction(id, nodeId, actionId, text);
     }
 
+    @DeleteMapping("/{id}/nodes/{nodeId}/actions/{actionId}")
+    public NodeGeneratorProjectView deleteWorkspaceNodeAction(
+            @PathVariable UUID id,
+            @PathVariable String nodeId,
+            @PathVariable String actionId
+    ) {
+        return nodeGeneratorUseCase.deleteWorkspaceNodeAction(id, nodeId, actionId);
+    }
+
     @PostMapping("/{id}/nodes/{nodeId}/actions/{actionId}/create-next-node")
     public NodeGeneratorProjectView createNextWorkspaceNode(@PathVariable UUID id, @PathVariable String nodeId, @PathVariable String actionId) {
         return nodeGeneratorUseCase.createNextWorkspaceNode(id, nodeId, actionId);

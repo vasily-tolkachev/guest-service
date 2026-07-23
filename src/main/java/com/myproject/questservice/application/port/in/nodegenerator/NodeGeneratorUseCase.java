@@ -28,6 +28,7 @@ public interface NodeGeneratorUseCase {
     NodeGeneratorProjectView addWorkspaceNodeAction(UUID projectId, String nodeId, String text);
 
     NodeGeneratorProjectView updateWorkspaceNodeAction(UUID projectId, String nodeId, String actionId, String text);
+    NodeGeneratorProjectView deleteWorkspaceNodeAction(UUID projectId, String nodeId, String actionId);
 
     NodeGeneratorProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId);
 

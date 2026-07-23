@@ -55,6 +55,7 @@ public interface QuestGeneratorUseCase {
     QuestProjectView addWorkspaceNodeAction(UUID projectId, String nodeId, String text);
 
     QuestProjectView updateWorkspaceNodeAction(UUID projectId, String nodeId, String actionId, String text);
+    QuestProjectView deleteWorkspaceNodeAction(UUID projectId, String nodeId, String actionId);
 
     QuestProjectView createNextWorkspaceNode(UUID projectId, String nodeId, String actionId);
     QuestProjectView deleteWorkspaceNode(UUID projectId, String nodeId);
