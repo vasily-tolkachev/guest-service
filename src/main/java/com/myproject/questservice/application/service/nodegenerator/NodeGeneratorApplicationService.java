@@ -351,6 +351,85 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         return new FirstSceneIdeasResponse(ideas);
     }
 
+    @Override
+    public FirstSceneIdeasResponse generateNextSceneIdeas(UUID projectId, String nodeId, String actionId) {
+        QuestProject project = getRequiredProject(projectId);
+        NodeWorkspace workspace = requiredWorkspace(project);
+
+        WorkspaceNode sourceNode = workspace.getNodes().stream()
+                .filter(node -> node.getId() != null && nodeId.equalsIgnoreCase(node.getId()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Node not found: " + nodeId));
+
+        WorkspaceAction action = (sourceNode.getActions() == null ? List.<WorkspaceAction>of() : sourceNode.getActions()).stream()
+                .filter(candidate -> candidate.getId() != null && actionId.equalsIgnoreCase(candidate.getId()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Action not found: " + actionId));
+
+        String sourceActionDescription = trimToEmpty(sourceNode.getActionDescription());
+        String sourceStateDescription = trimToEmpty(sourceNode.getStateDescription());
+        String sourceDescription = sourceStateDescription.isBlank()
+                ? sourceActionDescription
+                : sourceActionDescription + "\n" + sourceStateDescription;
+        if (sourceDescription.isBlank()) {
+            sourceDescription = trimToEmpty(sourceNode.getDescription());
+        }
+
+        String systemPrompt = """
+                Ты сценарист интерактивных квестов.
+                Сгенерируй 5 разных вариантов описания следующей сцены.
+                Верни ТОЛЬКО JSON формата:
+                {
+                  "ideas": [
+                    { "title": "Короткий заголовок", "scenarioText": "Описание следующей сцены (2-4 предложения)" }
+                  ]
+                }
+                Ограничения:
+                - Только русский язык.
+                - Без markdown.
+                - Учитывай контекст предыдущей сцены и выбранное действие.
+                - title: 2-8 слов.
+                - scenarioText: конкретная ситуация, которую можно сразу использовать как описание новой сцены.
+                """;
+
+        String userPrompt = """
+                Название проекта: %s
+                Предыдущая сцена (%s):
+                %s
+
+                Выбранное действие:
+                %s
+                """.formatted(
+                trimToEmpty(project.getName()).isBlank() ? "Квест" : trimToEmpty(project.getName()),
+                sourceNode.getId(),
+                sourceDescription.isBlank() ? "Контекст сцены отсутствует." : sourceDescription,
+                trimToEmpty(action.getText()).isBlank() ? action.getId() : trimToEmpty(action.getText())
+        );
+
+        JsonNode root = aiClient.generate(systemPrompt, userPrompt);
+        JsonNode ideasNode = root.path("ideas");
+        if (!ideasNode.isArray() || ideasNode.isEmpty()) {
+            throw new BadRequestException("AI did not return next scene ideas");
+        }
+
+        List<FirstSceneIdeaView> ideas = new ArrayList<>();
+        for (JsonNode ideaNode : ideasNode) {
+            String title = ideaNode.path("title").asText("").trim();
+            String scenarioText = ideaNode.path("scenarioText").asText("").trim();
+            if (title.isBlank() || scenarioText.isBlank()) {
+                continue;
+            }
+            ideas.add(new FirstSceneIdeaView(title, scenarioText));
+            if (ideas.size() >= 5) {
+                break;
+            }
+        }
+        if (ideas.isEmpty()) {
+            throw new BadRequestException("AI returned empty next scene ideas");
+        }
+        return new FirstSceneIdeasResponse(ideas);
+    }
+
     private QuestProject getRequiredProject(UUID id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + id));

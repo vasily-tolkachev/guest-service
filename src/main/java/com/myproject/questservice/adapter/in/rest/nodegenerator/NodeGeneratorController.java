@@ -49,6 +49,15 @@ public class NodeGeneratorController {
         return nodeGeneratorUseCase.generateFirstSceneIdeas(prompt);
     }
 
+    @PostMapping("/{id}/nodes/{nodeId}/actions/{actionId}/next-scene-ideas")
+    public FirstSceneIdeasResponse generateNextSceneIdeas(
+            @PathVariable UUID id,
+            @PathVariable String nodeId,
+            @PathVariable String actionId
+    ) {
+        return nodeGeneratorUseCase.generateNextSceneIdeas(id, nodeId, actionId);
+    }
+
     @GetMapping
     public List<NodeGeneratorProjectView> listProjects() {
         return nodeGeneratorUseCase.listProjects();

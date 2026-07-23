@@ -64,4 +64,6 @@ public interface NodeGeneratorUseCase {
     UploadQuestResponse createQuestFromProject(UUID projectId);
 
     FirstSceneIdeasResponse generateFirstSceneIdeas(String prompt);
+
+    FirstSceneIdeasResponse generateNextSceneIdeas(UUID projectId, String nodeId, String actionId);
 }
