@@ -973,6 +973,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         if (draftActions.isEmpty()) {
             draftActions = readStringArray(generated.path("actions"));
         }
+        draftActions = sanitizeGeneratedActions(node, workspace, actionDescription, stateDescription, draftActions);
         node.setGeneratedActionsDraft(draftActions);
         node.setUpdatedAt(Instant.now());
         projectRepository.save(project);
@@ -1367,6 +1368,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     private StagePromptPreview buildWorkspaceDescriptionPreview(QuestProject project, NodeWorkspace workspace, WorkspaceNode node) {
+        boolean firstScene = node.getSourceNodeId() == null || node.getSourceNodeId().isBlank();
         WorkspaceNode sourceNode = null;
         if (node.getSourceNodeId() != null && !node.getSourceNodeId().isBlank()) {
             sourceNode = workspace.getNodes().stream()
@@ -1404,6 +1406,10 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - state_description: 2-5 short sentences describing resulting state after action, this state should not describe anything that realated to this specific periond of time, what player see, so that the player can back to this scene again and again.
                 - both parts concrete, atmospheric, interactive
                 - no branching logic, no action list
+                - do not reveal large world chunks in one scene
+                - avoid plans, conclusions and future assumptions
+                - actions and objects must be local and directly observable
+                - for first scene keep density low: one focused location, 2-3 interactive objects, no more than 4 key facts
                 """;
         String userPrompt = """
                 Project:
@@ -1427,6 +1433,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 Global knowledge:
                 %s
 
+                Is first scene: %s
+
                 Write both action_description and state_description for this node.
                 """.formatted(
                 project.getName(),
@@ -1437,7 +1445,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 sourceActionDescription.isBlank() ? "(none)" : sourceActionDescription,
                 sourceStateDescription.isBlank() ? "(none)" : sourceStateDescription,
                 selectedActionText.isBlank() ? "(none)" : selectedActionText,
-                workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString()
+                workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString(),
+                firstScene ? "yes" : "no"
         );
         return new StagePromptPreview(systemPrompt, userPrompt);
     }
@@ -1472,6 +1481,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     private StagePromptPreview buildWorkspaceActionsPreview(WorkspaceNode node, NodeWorkspace workspace, String actionDescription, String stateDescription) {
+        boolean firstScene = node.getSourceNodeId() == null || node.getSourceNodeId().isBlank();
         String systemPrompt = """
                 You generate player actions for one quest node.
                 Return valid JSON only.
@@ -1486,6 +1496,10 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - 3-6 short actionable options
                 - each option starts with a verb
                 - avoid duplicates and vague options
+                - action can rely only on facts already known from current scene text and global knowledge
+                - do not propose actions that require hidden resources, tools or destinations that were not revealed yet
+                - if information is missing, prefer micro-actions: inspect, ask, listen, check, look around
+                - for first scene generate 3-5 low-risk micro-actions; avoid large strategic actions
                 """;
         String userPrompt = """
                 Node action_description:
@@ -1500,14 +1514,86 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 Existing node actions:
                 %s
 
+                Is first scene: %s
+
                 Generate candidate actions for this node.
                 """.formatted(
                 actionDescription.isBlank() ? "(none)" : actionDescription,
                 stateDescription.isBlank() ? "(none)" : stateDescription,
                 workspace.getGlobalKnowledge() == null ? "[]" : workspace.getGlobalKnowledge().toString(),
-                node.getActions().stream().map(WorkspaceAction::getText).toList()
+                node.getActions().stream().map(WorkspaceAction::getText).toList(),
+                firstScene ? "yes" : "no"
         );
         return new StagePromptPreview(systemPrompt, userPrompt);
+    }
+
+    private List<String> sanitizeGeneratedActions(
+            WorkspaceNode node,
+            NodeWorkspace workspace,
+            String actionDescription,
+            String stateDescription,
+            List<String> draftActions
+    ) {
+        if (draftActions == null || draftActions.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        String sceneText = ((actionDescription == null ? "" : actionDescription) + " " + (stateDescription == null ? "" : stateDescription)).toLowerCase(Locale.ROOT);
+        String knowledgeText = (workspace.getGlobalKnowledge() == null ? "" : String.join(" ", workspace.getGlobalKnowledge())).toLowerCase(Locale.ROOT);
+        Set<String> seen = new LinkedHashSet<>();
+        List<String> filtered = new ArrayList<>();
+        boolean firstScene = node.getSourceNodeId() == null || node.getSourceNodeId().isBlank();
+
+        for (String raw : draftActions) {
+            if (raw == null) {
+                continue;
+            }
+            String text = raw.trim();
+            if (text.isBlank()) {
+                continue;
+            }
+            String key = text.toLowerCase(Locale.ROOT);
+            if (seen.contains(key)) {
+                continue;
+            }
+            if (!isActionGroundedInKnownFacts(text, sceneText, knowledgeText, firstScene)) {
+                continue;
+            }
+            seen.add(key);
+            filtered.add(text);
+        }
+
+        if (firstScene && filtered.size() > 5) {
+            filtered = new ArrayList<>(filtered.subList(0, 5));
+        }
+        if (!firstScene && filtered.size() > 6) {
+            filtered = new ArrayList<>(filtered.subList(0, 6));
+        }
+        return filtered;
+    }
+
+    private boolean isActionGroundedInKnownFacts(String actionText, String sceneText, String knowledgeText, boolean firstScene) {
+        String text = actionText.toLowerCase(Locale.ROOT);
+        if (firstScene) {
+            if (text.startsWith("осмотреть")
+                    || text.startsWith("проверить")
+                    || text.startsWith("поговорить")
+                    || text.startsWith("прислушаться")
+                    || text.startsWith("выглянуть")
+                    || text.startsWith("подойти")) {
+                return true;
+            }
+        }
+        String[] words = text.split("[^\\p{L}\\p{N}]+");
+        for (String word : words) {
+            if (word.length() < 5) {
+                continue;
+            }
+            if (sceneText.contains(word) || knowledgeText.contains(word)) {
+                return true;
+            }
+        }
+        return !firstScene;
     }
 
     private String joinNodeDescription(String actionDescription, String stateDescription) {
