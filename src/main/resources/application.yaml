@@ -37,7 +37,7 @@ auth:
     jwks-uri: ${AUTH_JWKS_URI:http://127.0.0.1:8081/.well-known/jwks.json}
 openai:
   api-key: ${OPENAI_API_KEY:}
-  model: ${OPENAI_MODEL:gpt-5-mini}
+  model: ${OPENAI_MODEL:gpt-5}
   draft-model: ${OPENAI_DRAFT_MODEL:gpt-5-nano}
   connect-timeout-ms: ${OPENAI_CONNECT_TIMEOUT_MS:10000}
   read-timeout-ms: ${OPENAI_READ_TIMEOUT_MS:300000}
