@@ -2,6 +2,7 @@ package com.myproject.questservice.textruntime.application.port.in;
 
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 
 import java.util.List;
@@ -23,4 +24,10 @@ public interface TextRuntimeUseCase {
     RuntimeActionResult interact(UUID sessionId, String targetId);
 
     String inspectTarget(UUID sessionId, String targetId);
+
+    RuntimeGenerationStatus generateScene(UUID sessionId);
+
+    RuntimeGenerationStatus generateActions(UUID sessionId);
+
+    RuntimeGenerationStatus generationStatus(UUID sessionId);
 }

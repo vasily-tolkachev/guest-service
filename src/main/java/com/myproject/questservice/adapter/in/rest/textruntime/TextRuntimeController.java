@@ -2,6 +2,7 @@ package com.myproject.questservice.adapter.in.rest.textruntime;
 
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import jakarta.validation.Valid;
@@ -65,6 +66,21 @@ public class TextRuntimeController {
     @PostMapping("/sessions/{sessionId}/inspect-target")
     public InspectTargetResponse inspectTarget(@PathVariable UUID sessionId, @Valid @RequestBody InspectTargetRequest request) {
         return new InspectTargetResponse(runtimeUseCase.inspectTarget(sessionId, request.targetId()));
+    }
+
+    @PostMapping("/sessions/{sessionId}/generate-scene")
+    public RuntimeGenerationStatus generateScene(@PathVariable UUID sessionId) {
+        return runtimeUseCase.generateScene(sessionId);
+    }
+
+    @PostMapping("/sessions/{sessionId}/generate-actions")
+    public RuntimeGenerationStatus generateActions(@PathVariable UUID sessionId) {
+        return runtimeUseCase.generateActions(sessionId);
+    }
+
+    @GetMapping("/sessions/{sessionId}/generation-status")
+    public RuntimeGenerationStatus generationStatus(@PathVariable UUID sessionId) {
+        return runtimeUseCase.generationStatus(sessionId);
     }
 
     public record MoveRequest(@NotBlank String locationId) {
