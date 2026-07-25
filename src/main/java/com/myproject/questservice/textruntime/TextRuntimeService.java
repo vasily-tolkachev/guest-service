@@ -9,6 +9,7 @@ import com.myproject.questservice.domain.generator.WorkspaceNode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,9 +21,30 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TextRuntimeService {
     private final ProjectRepository projectRepository;
     private final Map<UUID, RuntimeSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, SampleRuntimeQuests.RuntimeQuestDefinition> runtimeQuests;
 
     public TextRuntimeService(ProjectRepository projectRepository) {
         this.projectRepository = projectRepository;
+        this.runtimeQuests = Collections.unmodifiableMap(SampleRuntimeQuests.definitions());
+    }
+
+    public List<RuntimeQuestSummary> listRuntimeQuests() {
+        List<RuntimeQuestSummary> result = new ArrayList<>();
+        for (SampleRuntimeQuests.RuntimeQuestDefinition def : runtimeQuests.values()) {
+            result.add(new RuntimeQuestSummary(def.id(), def.name(), def.description()));
+        }
+        return result;
+    }
+
+    public RuntimeSnapshot startRuntimeQuest(String questId) {
+        SampleRuntimeQuests.RuntimeQuestDefinition def = runtimeQuests.get(normalizeQuestId(questId));
+        if (def == null) {
+            throw new NotFoundException("Runtime quest not found");
+        }
+        GameEngine engine = new GameEngine(def.world(), new GameState(def.startLocationId()));
+        UUID sessionId = UUID.randomUUID();
+        sessions.put(sessionId, new RuntimeSession(sessionId, null, def.world(), engine));
+        return snapshot(sessionId, engine.inspect());
     }
 
     public RuntimeSnapshot start(UUID projectId) {
@@ -160,6 +182,10 @@ public class TextRuntimeService {
 
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase();
+    }
+
+    private static String normalizeQuestId(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
     }
 
     private record RuntimeSession(

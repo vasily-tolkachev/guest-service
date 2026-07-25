@@ -1,6 +1,7 @@
 package com.myproject.questservice.adapter.in.rest;
 
 import com.myproject.questservice.textruntime.RuntimeSnapshot;
+import com.myproject.questservice.textruntime.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.TextRuntimeService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -22,6 +24,16 @@ public class TextRuntimeController {
 
     public TextRuntimeController(TextRuntimeService runtimeService) {
         this.runtimeService = runtimeService;
+    }
+
+    @GetMapping("/quests")
+    public List<RuntimeQuestSummary> listRuntimeQuests() {
+        return runtimeService.listRuntimeQuests();
+    }
+
+    @PostMapping("/quests/{questId}/start")
+    public RuntimeSnapshot startQuest(@PathVariable String questId) {
+        return runtimeService.startRuntimeQuest(questId);
     }
 
     @PostMapping("/projects/{projectId}/start")
@@ -58,4 +70,3 @@ public class TextRuntimeController {
     public record UseRequest(@NotBlank String itemId, @NotBlank String targetId) {
     }
 }
-
