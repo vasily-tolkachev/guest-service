@@ -46,12 +46,12 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         );
         UUID sessionId = UUID.randomUUID();
         sessionStorePort.save(sessionId, engine);
-        return snapshot(sessionId, engine.inspect());
+        return snapshot(sessionId, engine);
     }
 
     @Override
     public RuntimeSnapshot inspect(UUID sessionId) {
-        return snapshot(sessionId, getEngine(sessionId).inspect());
+        return snapshot(sessionId, getEngine(sessionId));
     }
 
     @Override
@@ -61,7 +61,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         if (!message.startsWith("Moved to ")) {
             throw new IllegalArgumentException(message);
         }
-        return snapshot(sessionId, engine.inspect());
+        return snapshot(sessionId, engine);
     }
 
     @Override
@@ -71,7 +71,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         if (!message.startsWith("Item added to inventory: ")) {
             throw new IllegalArgumentException(message);
         }
-        return snapshot(sessionId, engine.inspect());
+        return snapshot(sessionId, engine);
     }
 
     @Override
@@ -86,7 +86,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 || message.startsWith("Unknown action: ")) {
             throw new IllegalArgumentException(message);
         }
-        return snapshot(sessionId, engine.inspect());
+        return snapshot(sessionId, engine);
     }
 
     @Override
@@ -98,7 +98,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 || message.startsWith("Target is empty")) {
             throw new IllegalArgumentException(message);
         }
-        return new RuntimeActionResult(message, snapshot(sessionId, engine.inspect()));
+        return new RuntimeActionResult(message, snapshot(sessionId, engine));
     }
 
     @Override
@@ -112,12 +112,16 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .orElseThrow(() -> new NotFoundException("Runtime session not found"));
     }
 
-    private RuntimeSnapshot snapshot(UUID sessionId, GameEngine.InspectResult inspect) {
+    private RuntimeSnapshot snapshot(UUID sessionId, GameEngine engine) {
+        GameEngine.InspectResult inspect = engine.inspect();
         List<RuntimeSnapshot.ItemView> items = inspect.visibleItems().stream()
                 .map(i -> new RuntimeSnapshot.ItemView(i.getId(), i.getName()))
                 .toList();
         List<RuntimeSnapshot.ExitView> exits = inspect.exits().stream()
                 .map(e -> new RuntimeSnapshot.ExitView(e.actionText(), e.targetLocationId()))
+                .toList();
+        List<RuntimeSnapshot.ActionView> availableActions = engine.getAvailableActions().stream()
+                .map(a -> new RuntimeSnapshot.ActionView(a.id(), a.description(), a.targetId()))
                 .toList();
         List<RuntimeSnapshot.ItemView> inventory = inspect.inventory().stream()
                 .map(i -> new RuntimeSnapshot.ItemView(i.getId(), i.getName()))
@@ -131,6 +135,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 inspect.location().getDescription(),
                 items,
                 exits,
+                availableActions,
                 inventory,
                 npcs
         );
