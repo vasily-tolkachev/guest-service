@@ -94,6 +94,10 @@ public class GameEngine {
         return "Unknown action: " + actionId;
     }
 
+    public GameState getState() {
+        return state;
+    }
+
     public String talk(String npcId) {
         String npcKey = findVisibleNpc(npcId);
         if (npcKey == null) {

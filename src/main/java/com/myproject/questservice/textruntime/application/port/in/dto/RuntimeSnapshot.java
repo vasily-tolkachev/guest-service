@@ -11,7 +11,8 @@ public record RuntimeSnapshot(
         List<ExitView> exits,
         List<ActionView> availableActions,
         List<ItemView> inventory,
-        List<NpcView> npcs
+        List<NpcView> npcs,
+        List<String> knownFacts
 ) {
     public record ItemView(String id, String name) {
     }
@@ -19,7 +20,7 @@ public record RuntimeSnapshot(
     public record ExitView(String actionText, String targetLocationId) {
     }
 
-    public record ActionView(String id, String description, String targetId) {
+    public record ActionView(String id, String description, String targetId, List<String> requiredItems) {
     }
 
     public record NpcView(String id, String description, String dialogue) {

@@ -183,7 +183,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .map(e -> new RuntimeSnapshot.ExitView(e.actionText(), e.targetLocationId()))
                 .toList();
         List<RuntimeSnapshot.ActionView> worldActions = engine.getAvailableActions().stream()
-                .map(a -> new RuntimeSnapshot.ActionView(a.id(), a.description(), a.targetId()))
+                .map(a -> new RuntimeSnapshot.ActionView(a.id(), a.description(), a.targetId(), List.copyOf(a.requiredItems())))
                 .toList();
         // Всегда отдаём действия для UI: world-actions + переходы + предметы + NPC.
         List<RuntimeSnapshot.ActionView> availableActions = new ArrayList<>();
@@ -204,7 +204,8 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 availableActions.add(new RuntimeSnapshot.ActionView(
                         "move:" + target,
                         "Перейти: " + (exit.actionText() == null || exit.actionText().isBlank() ? target : exit.actionText()),
-                        target
+                        target,
+                        List.of()
                 ));
             }
         }
@@ -217,7 +218,8 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 availableActions.add(new RuntimeSnapshot.ActionView(
                         "item:" + item.id(),
                         "Взаимодействовать с предметом: " + (item.name() == null || item.name().isBlank() ? item.id() : item.name()),
-                        item.id()
+                        item.id(),
+                        List.of()
                 ));
             }
         }
@@ -233,7 +235,8 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 availableActions.add(new RuntimeSnapshot.ActionView(
                         "npc:" + npc.id(),
                         "Поговорить: " + npc.id(),
-                        npc.id()
+                        npc.id(),
+                        List.of()
                 ));
             }
         }
@@ -248,7 +251,8 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 exits,
                 availableActions,
                 inventory,
-                npcs
+                npcs,
+                List.copyOf(engine.getState().getKnownFacts())
         );
     }
 
