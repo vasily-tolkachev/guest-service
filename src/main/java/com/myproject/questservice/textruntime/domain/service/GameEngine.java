@@ -1,4 +1,10 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.domain.service;
+
+import com.myproject.questservice.textruntime.domain.model.GameState;
+import com.myproject.questservice.textruntime.domain.model.Item;
+import com.myproject.questservice.textruntime.domain.model.Location;
+import com.myproject.questservice.textruntime.domain.model.Npc;
+import com.myproject.questservice.textruntime.domain.model.World;
 
 import java.util.ArrayList;
 import java.util.List;

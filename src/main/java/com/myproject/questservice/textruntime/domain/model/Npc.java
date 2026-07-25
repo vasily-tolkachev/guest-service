@@ -1,4 +1,4 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.domain.model;
 
 public class Npc {
     private final String id;

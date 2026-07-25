@@ -1,68 +1,82 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.application.service;
 
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
+import com.myproject.questservice.textruntime.application.port.out.RuntimeQuestCatalogPort;
+import com.myproject.questservice.textruntime.application.port.out.RuntimeSessionStorePort;
+import com.myproject.questservice.textruntime.domain.model.GameState;
+import com.myproject.questservice.textruntime.domain.model.Player;
+import com.myproject.questservice.textruntime.domain.model.RuntimeQuestDefinition;
+import com.myproject.questservice.textruntime.domain.service.GameEngine;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-public class TextRuntimeService {
-    private final Map<UUID, RuntimeSession> sessions = new ConcurrentHashMap<>();
-    private final Map<String, SampleRuntimeQuests.RuntimeQuestDefinition> runtimeQuests;
+public class TextRuntimeApplicationService implements TextRuntimeUseCase {
+    private final RuntimeQuestCatalogPort questCatalogPort;
+    private final RuntimeSessionStorePort sessionStorePort;
 
-    public TextRuntimeService() {
-        this.runtimeQuests = Collections.unmodifiableMap(SampleRuntimeQuests.definitions());
+    public TextRuntimeApplicationService(
+            RuntimeQuestCatalogPort questCatalogPort,
+            RuntimeSessionStorePort sessionStorePort
+    ) {
+        this.questCatalogPort = questCatalogPort;
+        this.sessionStorePort = sessionStorePort;
     }
 
+    @Override
     public List<RuntimeQuestSummary> listRuntimeQuests() {
-        List<RuntimeQuestSummary> result = new ArrayList<>();
-        for (SampleRuntimeQuests.RuntimeQuestDefinition def : runtimeQuests.values()) {
-            result.add(new RuntimeQuestSummary(def.id(), def.name(), def.description()));
-        }
-        return result;
+        return questCatalogPort.findAll().stream()
+                .map(def -> new RuntimeQuestSummary(def.id(), def.name(), def.description()))
+                .toList();
     }
 
+    @Override
     public RuntimeSnapshot startRuntimeQuest(String questId) {
-        SampleRuntimeQuests.RuntimeQuestDefinition def = runtimeQuests.get(normalizeQuestId(questId));
-        if (def == null) {
-            throw new NotFoundException("Runtime quest not found");
-        }
-        GameEngine engine = new GameEngine(def.world(), new GameState(def.startLocationId(), new Player()));
+        RuntimeQuestDefinition definition = questCatalogPort.findById(normalizeQuestId(questId))
+                .orElseThrow(() -> new NotFoundException("Runtime quest not found"));
+        GameEngine engine = new GameEngine(
+                definition.world(),
+                new GameState(definition.startLocationId(), new Player())
+        );
         UUID sessionId = UUID.randomUUID();
-        sessions.put(sessionId, new RuntimeSession(sessionId, def.world(), engine));
+        sessionStorePort.save(sessionId, engine);
         return snapshot(sessionId, engine.inspect());
     }
 
+    @Override
     public RuntimeSnapshot inspect(UUID sessionId) {
-        return snapshot(sessionId, getSession(sessionId).engine.inspect());
+        return snapshot(sessionId, getEngine(sessionId).inspect());
     }
 
+    @Override
     public RuntimeSnapshot move(UUID sessionId, String locationId) {
-        RuntimeSession session = getSession(sessionId);
-        String message = session.engine.move(locationId);
+        GameEngine engine = getEngine(sessionId);
+        String message = engine.move(locationId);
         if (!message.startsWith("Moved to ")) {
             throw new IllegalArgumentException(message);
         }
-        return snapshot(sessionId, session.engine.inspect());
+        return snapshot(sessionId, engine.inspect());
     }
 
+    @Override
     public RuntimeSnapshot take(UUID sessionId, String itemId) {
-        RuntimeSession session = getSession(sessionId);
-        String message = session.engine.take(itemId);
+        GameEngine engine = getEngine(sessionId);
+        String message = engine.take(itemId);
         if (!message.startsWith("Item added to inventory: ")) {
             throw new IllegalArgumentException(message);
         }
-        return snapshot(sessionId, session.engine.inspect());
+        return snapshot(sessionId, engine.inspect());
     }
 
+    @Override
     public RuntimeSnapshot use(UUID sessionId, String itemId, String targetId) {
-        RuntimeSession session = getSession(sessionId);
-        String message = session.engine.use(itemId, targetId);
+        GameEngine engine = getEngine(sessionId);
+        String message = engine.use(itemId, targetId);
         if (message.startsWith("No action for using ")
                 || message.startsWith("Ambiguous action")
                 || message.startsWith("Item is not in inventory: ")
@@ -71,15 +85,12 @@ public class TextRuntimeService {
                 || message.startsWith("Unknown action: ")) {
             throw new IllegalArgumentException(message);
         }
-        return snapshot(sessionId, session.engine.inspect());
+        return snapshot(sessionId, engine.inspect());
     }
 
-    private RuntimeSession getSession(UUID sessionId) {
-        RuntimeSession session = sessions.get(sessionId);
-        if (session == null) {
-            throw new NotFoundException("Runtime session not found");
-        }
-        return session;
+    private GameEngine getEngine(UUID sessionId) {
+        return sessionStorePort.find(sessionId)
+                .orElseThrow(() -> new NotFoundException("Runtime session not found"));
     }
 
     private RuntimeSnapshot snapshot(UUID sessionId, GameEngine.InspectResult inspect) {
@@ -108,12 +119,5 @@ public class TextRuntimeService {
 
     private static String normalizeQuestId(String value) {
         return value == null ? "" : value.trim().toLowerCase();
-    }
-
-    private record RuntimeSession(
-            UUID sessionId,
-            World world,
-            GameEngine engine
-    ) {
     }
 }

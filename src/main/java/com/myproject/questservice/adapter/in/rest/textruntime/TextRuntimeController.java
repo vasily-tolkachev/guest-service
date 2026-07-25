@@ -1,8 +1,8 @@
-package com.myproject.questservice.adapter.in.rest;
+package com.myproject.questservice.adapter.in.rest.textruntime;
 
-import com.myproject.questservice.textruntime.RuntimeSnapshot;
-import com.myproject.questservice.textruntime.RuntimeQuestSummary;
-import com.myproject.questservice.textruntime.TextRuntimeService;
+import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.validation.annotation.Validated;
@@ -20,40 +20,40 @@ import java.util.UUID;
 @Validated
 @RequestMapping("/api/text-runtime")
 public class TextRuntimeController {
-    private final TextRuntimeService runtimeService;
+    private final TextRuntimeUseCase runtimeUseCase;
 
-    public TextRuntimeController(TextRuntimeService runtimeService) {
-        this.runtimeService = runtimeService;
+    public TextRuntimeController(TextRuntimeUseCase runtimeUseCase) {
+        this.runtimeUseCase = runtimeUseCase;
     }
 
     @GetMapping("/quests")
     public List<RuntimeQuestSummary> listRuntimeQuests() {
-        return runtimeService.listRuntimeQuests();
+        return runtimeUseCase.listRuntimeQuests();
     }
 
     @PostMapping("/quests/{questId}/start")
     public RuntimeSnapshot startQuest(@PathVariable String questId) {
-        return runtimeService.startRuntimeQuest(questId);
+        return runtimeUseCase.startRuntimeQuest(questId);
     }
 
     @GetMapping("/sessions/{sessionId}/inspect")
     public RuntimeSnapshot inspect(@PathVariable UUID sessionId) {
-        return runtimeService.inspect(sessionId);
+        return runtimeUseCase.inspect(sessionId);
     }
 
     @PostMapping("/sessions/{sessionId}/move")
     public RuntimeSnapshot move(@PathVariable UUID sessionId, @Valid @RequestBody MoveRequest request) {
-        return runtimeService.move(sessionId, request.locationId());
+        return runtimeUseCase.move(sessionId, request.locationId());
     }
 
     @PostMapping("/sessions/{sessionId}/take")
     public RuntimeSnapshot take(@PathVariable UUID sessionId, @Valid @RequestBody TakeRequest request) {
-        return runtimeService.take(sessionId, request.itemId());
+        return runtimeUseCase.take(sessionId, request.itemId());
     }
 
     @PostMapping("/sessions/{sessionId}/use")
     public RuntimeSnapshot use(@PathVariable UUID sessionId, @Valid @RequestBody UseRequest request) {
-        return runtimeService.use(sessionId, request.itemId(), request.targetId());
+        return runtimeUseCase.use(sessionId, request.itemId(), request.targetId());
     }
 
     public record MoveRequest(@NotBlank String locationId) {

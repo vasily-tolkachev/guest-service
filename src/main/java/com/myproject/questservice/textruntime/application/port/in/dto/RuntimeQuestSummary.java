@@ -1,4 +1,4 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.application.port.in.dto;
 
 public record RuntimeQuestSummary(
         String id,
@@ -6,4 +6,3 @@ public record RuntimeQuestSummary(
         String description
 ) {
 }
-

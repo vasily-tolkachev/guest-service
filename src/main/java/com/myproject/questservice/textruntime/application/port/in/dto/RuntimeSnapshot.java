@@ -1,4 +1,4 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.application.port.in.dto;
 
 import java.util.List;
 import java.util.UUID;

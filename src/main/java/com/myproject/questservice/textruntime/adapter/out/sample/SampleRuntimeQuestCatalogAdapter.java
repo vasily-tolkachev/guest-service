@@ -1,13 +1,33 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.adapter.out.sample;
+
+import com.myproject.questservice.textruntime.application.port.out.RuntimeQuestCatalogPort;
+import com.myproject.questservice.textruntime.domain.model.Item;
+import com.myproject.questservice.textruntime.domain.model.Location;
+import com.myproject.questservice.textruntime.domain.model.Npc;
+import com.myproject.questservice.textruntime.domain.model.RuntimeQuestDefinition;
+import com.myproject.questservice.textruntime.domain.model.World;
+import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-public final class SampleRuntimeQuests {
-    private SampleRuntimeQuests() {
+@Component
+public class SampleRuntimeQuestCatalogAdapter implements RuntimeQuestCatalogPort {
+    private final Map<String, RuntimeQuestDefinition> quests = definitions();
+
+    @Override
+    public List<RuntimeQuestDefinition> findAll() {
+        return quests.values().stream().toList();
     }
 
-    public static Map<String, RuntimeQuestDefinition> definitions() {
+    @Override
+    public Optional<RuntimeQuestDefinition> findById(String questId) {
+        return Optional.ofNullable(quests.get(normalizeQuestId(questId)));
+    }
+
+    private static Map<String, RuntimeQuestDefinition> definitions() {
         Map<String, RuntimeQuestDefinition> map = new LinkedHashMap<>();
         map.put("shipwreck", new RuntimeQuestDefinition(
                 "shipwreck",
@@ -56,12 +76,7 @@ public final class SampleRuntimeQuests {
         return world;
     }
 
-    public record RuntimeQuestDefinition(
-            String id,
-            String name,
-            String description,
-            World world,
-            String startLocationId
-    ) {
+    private static String normalizeQuestId(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
     }
 }

@@ -1,4 +1,4 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.domain.model;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;

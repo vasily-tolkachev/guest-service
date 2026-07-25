@@ -1,4 +1,4 @@
-package com.myproject.questservice.textruntime;
+package com.myproject.questservice.textruntime.domain.model;
 
 public class Item {
     private final String id;
@@ -17,7 +17,6 @@ public class Item {
         return description;
     }
 
-    // Совместимость со старым API фронта (поле name).
     public String getName() {
         return description;
     }
