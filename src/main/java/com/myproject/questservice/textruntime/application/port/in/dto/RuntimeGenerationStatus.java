@@ -9,6 +9,12 @@ public record RuntimeGenerationStatus(
         boolean sceneGenerated,
         boolean actionsGenerated,
         String generatedSceneText,
-        List<String> generatedActions
+        List<GeneratedAction> generatedActions
 ) {
+    public record GeneratedAction(
+            String id,
+            String label,
+            String targetId
+    ) {
+    }
 }

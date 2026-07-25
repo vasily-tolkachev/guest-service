@@ -1,6 +1,8 @@
 package com.myproject.questservice.textruntime.application.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.myproject.questservice.application.service.NotFoundException;
+import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
@@ -27,14 +29,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     private final RuntimeQuestCatalogPort questCatalogPort;
     private final RuntimeSessionStorePort sessionStorePort;
+    private final AiClient aiClient;
     private final Map<UUID, Map<String, GeneratedSceneState>> generatedBySession = new ConcurrentHashMap<>();
 
     public TextRuntimeApplicationService(
             RuntimeQuestCatalogPort questCatalogPort,
-            RuntimeSessionStorePort sessionStorePort
+            RuntimeSessionStorePort sessionStorePort,
+            AiClient aiClient
     ) {
         this.questCatalogPort = questCatalogPort;
         this.sessionStorePort = sessionStorePort;
+        this.aiClient = aiClient;
     }
 
     @Override
@@ -101,13 +106,14 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     @Override
     public RuntimeActionResult interact(UUID sessionId, String targetId) {
         GameEngine engine = getEngine(sessionId);
-        String message = engine.interact(targetId);
+        GameEngine.InteractionResult result = engine.interactDetailed(targetId);
+        String message = result.message();
         if (message.startsWith("No interaction available for: ")
                 || message.startsWith("Ambiguous interaction target: ")
                 || message.startsWith("Target is empty")) {
             throw new IllegalArgumentException(message);
         }
-        return new RuntimeActionResult(message, snapshot(sessionId, engine));
+        return new RuntimeActionResult(message, snapshot(sessionId, engine), result.engineAction());
     }
 
     @Override
@@ -119,10 +125,15 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     @Override
     public RuntimeGenerationStatus generateScene(UUID sessionId) {
         GameEngine engine = getEngine(sessionId);
-        GameEngine.InspectResult inspect = engine.inspect();
-        String sceneId = inspect.location().getId();
+        RuntimeSnapshot snapshot = snapshot(sessionId, engine);
+        String sceneId = snapshot.currentLocationId();
         GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
-        state.generatedSceneText = inspect.location().getDescription();
+        JsonNode response = aiClient.generate(
+                "Ты генератор сцены текстового квеста. Верни JSON формата {\"scene\":\"...\"}.",
+                buildSceneUserPrompt(snapshot)
+        );
+        String generatedScene = response.path("scene").asText("").trim();
+        state.generatedSceneText = generatedScene.isBlank() ? snapshot.description() : generatedScene;
         state.sceneGenerated = true;
         return toStatus(sessionId, sceneId, state);
     }
@@ -130,25 +141,38 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     @Override
     public RuntimeGenerationStatus generateActions(UUID sessionId) {
         GameEngine engine = getEngine(sessionId);
-        GameEngine.InspectResult inspect = engine.inspect();
-        String sceneId = inspect.location().getId();
+        RuntimeSnapshot snapshot = snapshot(sessionId, engine);
+        String sceneId = snapshot.currentLocationId();
         GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
 
-        List<String> actions = new ArrayList<>();
-        for (var exit : inspect.exits()) {
-            String label = exit.actionText() == null || exit.actionText().isBlank()
-                    ? exit.targetLocationId()
-                    : exit.actionText();
-            actions.add("Переход: " + label);
+        JsonNode response = aiClient.generate(
+                "Ты генератор действий для текстового квеста. Верни JSON формата {\"actions\":[{\"id\":\"...\",\"label\":\"...\",\"targetId\":\"...\"}]}.\n"
+                        + "targetId должен соответствовать уже существующим целям из контекста.",
+                buildActionsUserPrompt(snapshot)
+        );
+        List<RuntimeGenerationStatus.GeneratedAction> actions = new ArrayList<>();
+        for (JsonNode actionNode : response.path("actions")) {
+            String id = actionNode.path("id").asText("").trim();
+            String label = actionNode.path("label").asText("").trim();
+            String targetId = actionNode.path("targetId").asText("").trim();
+            if (label.isBlank() || targetId.isBlank()) {
+                continue;
+            }
+            actions.add(new RuntimeGenerationStatus.GeneratedAction(
+                    id.isBlank() ? "generated:" + targetId : id,
+                    label,
+                    targetId
+            ));
         }
-        for (var item : inspect.visibleItems()) {
-            actions.add("Предмет: " + item.getName());
-        }
-        for (var npc : inspect.visibleNpcs()) {
-            actions.add("NPC: " + npc.getId());
-        }
-        for (var action : engine.getAvailableActions()) {
-            actions.add("Действие: " + (action.description() == null || action.description().isBlank() ? action.id() : action.description()));
+
+        if (actions.isEmpty()) {
+            for (RuntimeSnapshot.ActionView action : snapshot.availableActions()) {
+                actions.add(new RuntimeGenerationStatus.GeneratedAction(
+                        action.id(),
+                        action.description() == null || action.description().isBlank() ? action.id() : action.description(),
+                        action.targetId()
+                ));
+            }
         }
         state.generatedActions = List.copyOf(actions);
         state.actionsGenerated = true;
@@ -262,6 +286,28 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         );
     }
 
+    private static String buildSceneUserPrompt(RuntimeSnapshot snapshot) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Текущая сцена: ").append(snapshot.currentLocationId()).append('\n');
+        sb.append("Описание: ").append(snapshot.description()).append('\n');
+        sb.append("Инвентарь: ").append(snapshot.inventory().stream().map(RuntimeSnapshot.ItemView::name).toList()).append('\n');
+        sb.append("NPC: ").append(snapshot.npcs().stream().map(RuntimeSnapshot.NpcView::id).toList()).append('\n');
+        sb.append("Переходы: ").append(snapshot.exits().stream().map(RuntimeSnapshot.ExitView::targetLocationId).toList()).append('\n');
+        sb.append("Сделай короткое, атмосферное, но игровое описание этой сцены.");
+        return sb.toString();
+    }
+
+    private static String buildActionsUserPrompt(RuntimeSnapshot snapshot) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Локация: ").append(snapshot.currentLocationId()).append('\n');
+        sb.append("Описание: ").append(snapshot.description()).append('\n');
+        sb.append("Доступные цели (обязательно использовать только их): ")
+                .append(snapshot.availableActions().stream().map(RuntimeSnapshot.ActionView::targetId).filter(t -> t != null && !t.isBlank()).distinct().toList())
+                .append('\n');
+        sb.append("Сгенерируй список действий для игрока.");
+        return sb.toString();
+    }
+
     private static String normalizeQuestId(String value) {
         return value == null ? "" : value.trim().toLowerCase();
     }
@@ -270,6 +316,6 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         private volatile boolean sceneGenerated;
         private volatile boolean actionsGenerated;
         private volatile String generatedSceneText;
-        private volatile List<String> generatedActions = Collections.emptyList();
+        private volatile List<RuntimeGenerationStatus.GeneratedAction> generatedActions = Collections.emptyList();
     }
 }

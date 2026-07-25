@@ -134,14 +134,18 @@ public class GameEngine {
     }
 
     public String interact(String targetId) {
+        return interactDetailed(targetId).message();
+    }
+
+    public InteractionResult interactDetailed(String targetId) {
         if (targetId == null || targetId.isBlank()) {
-            return "Target is empty";
+            return new InteractionResult("Target is empty", "error:target_empty");
         }
 
         // 1) NPC interaction has priority.
         String npcKey = findVisibleNpc(targetId);
         if (npcKey != null) {
-            return talk(npcKey);
+            return new InteractionResult(talk(npcKey), "talk:" + npcKey);
         }
 
         // 2) Try executing world action bound to target in current location.
@@ -149,24 +153,26 @@ public class GameEngine {
                 .filter(action -> action.targetId() != null && action.targetId().equalsIgnoreCase(targetId))
                 .toList();
         if (targetActions.size() == 1) {
-            return executeAction(targetActions.get(0).id());
+            String actionId = targetActions.get(0).id();
+            return new InteractionResult(executeAction(actionId), "executeAction:" + actionId);
         }
         if (targetActions.size() > 1) {
-            return "Ambiguous interaction target: " + targetId;
+            return new InteractionResult("Ambiguous interaction target: " + targetId, "error:ambiguous_target:" + targetId);
         }
 
         // 3) Item defaults to take (common text-quest behavior).
         String itemKey = findVisibleItem(targetId);
         if (itemKey != null) {
-            return take(itemKey);
+            return new InteractionResult(take(itemKey), "take:" + itemKey);
         }
 
         // 4) Location interaction defaults to move.
         if (isReachableLocation(targetId)) {
-            return move(findReachableLocationId(targetId));
+            String locationId = findReachableLocationId(targetId);
+            return new InteractionResult(move(locationId), "move:" + locationId);
         }
 
-        return "No interaction available for: " + targetId;
+        return new InteractionResult("No interaction available for: " + targetId, "error:no_interaction:" + targetId);
     }
 
     public InspectResult inspect() {
@@ -272,6 +278,12 @@ public class GameEngine {
             List<ExitView> exits,
             List<Item> inventory,
             List<Npc> visibleNpcs
+    ) {
+    }
+
+    public record InteractionResult(
+            String message,
+            String engineAction
     ) {
     }
 }
