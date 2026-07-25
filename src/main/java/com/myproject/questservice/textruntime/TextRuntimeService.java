@@ -32,7 +32,7 @@ public class TextRuntimeService {
         if (def == null) {
             throw new NotFoundException("Runtime quest not found");
         }
-        GameEngine engine = new GameEngine(def.world(), new GameState(def.startLocationId()));
+        GameEngine engine = new GameEngine(def.world(), new GameState(def.startLocationId(), new Player()));
         UUID sessionId = UUID.randomUUID();
         sessions.put(sessionId, new RuntimeSession(sessionId, def.world(), engine));
         return snapshot(sessionId, engine.inspect());
@@ -44,19 +44,33 @@ public class TextRuntimeService {
 
     public RuntimeSnapshot move(UUID sessionId, String locationId) {
         RuntimeSession session = getSession(sessionId);
-        session.engine.move(locationId);
+        String message = session.engine.move(locationId);
+        if (!message.startsWith("Moved to ")) {
+            throw new IllegalArgumentException(message);
+        }
         return snapshot(sessionId, session.engine.inspect());
     }
 
     public RuntimeSnapshot take(UUID sessionId, String itemId) {
         RuntimeSession session = getSession(sessionId);
-        session.engine.take(itemId);
+        String message = session.engine.take(itemId);
+        if (!message.startsWith("Item added to inventory: ")) {
+            throw new IllegalArgumentException(message);
+        }
         return snapshot(sessionId, session.engine.inspect());
     }
 
     public RuntimeSnapshot use(UUID sessionId, String itemId, String targetId) {
         RuntimeSession session = getSession(sessionId);
-        session.engine.use(itemId, targetId);
+        String message = session.engine.use(itemId, targetId);
+        if (message.startsWith("No action for using ")
+                || message.startsWith("Ambiguous action")
+                || message.startsWith("Item is not in inventory: ")
+                || message.startsWith("Action is not available in this location")
+                || message.startsWith("Action conditions are not met")
+                || message.startsWith("Unknown action: ")) {
+            throw new IllegalArgumentException(message);
+        }
         return snapshot(sessionId, session.engine.inspect());
     }
 
@@ -78,13 +92,17 @@ public class TextRuntimeService {
         List<RuntimeSnapshot.ItemView> inventory = inspect.inventory().stream()
                 .map(i -> new RuntimeSnapshot.ItemView(i.getId(), i.getName()))
                 .toList();
+        List<RuntimeSnapshot.NpcView> npcs = inspect.visibleNpcs().stream()
+                .map(n -> new RuntimeSnapshot.NpcView(n.getId(), n.getDescription(), n.getDialogue()))
+                .toList();
         return new RuntimeSnapshot(
                 sessionId,
                 inspect.location().getId(),
                 inspect.location().getDescription(),
                 items,
                 exits,
-                inventory
+                inventory,
+                npcs
         );
     }
 

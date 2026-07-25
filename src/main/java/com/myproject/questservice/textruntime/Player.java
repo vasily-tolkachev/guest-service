@@ -1,26 +1,12 @@
 package com.myproject.questservice.textruntime;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class Player {
-    private final List<Item> inventory;
+    private final Set<String> inventory = new LinkedHashSet<>();
 
-    public Player() {
-        this.inventory = new ArrayList<>();
-    }
-
-    public List<Item> getInventory() {
-        return Collections.unmodifiableList(inventory);
-    }
-
-    public void addItem(Item item) {
-        inventory.add(item);
-    }
-
-    public boolean hasItem(String itemId) {
-        return inventory.stream().anyMatch(i -> i.getId().equalsIgnoreCase(itemId));
+    public Set<String> getInventory() {
+        return inventory;
     }
 }
-

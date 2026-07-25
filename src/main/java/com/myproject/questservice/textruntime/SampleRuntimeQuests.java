@@ -1,7 +1,6 @@
 package com.myproject.questservice.textruntime;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 public final class SampleRuntimeQuests {
@@ -15,42 +14,46 @@ public final class SampleRuntimeQuests {
                 "Кораблекрушение",
                 "Выживание на острове: пляж, лес, пещера и древние руины.",
                 buildShipwreckWorld(),
-                "БЕРЕГ"
+                "берег"
         ));
         return map;
     }
 
     private static World buildShipwreckWorld() {
-        Map<String, Location> locations = new LinkedHashMap<>();
-        locations.put("БЕРЕГ", new Location(
-                "БЕРЕГ",
-                "Вы на берегу после шторма. Рядом обломки лодки и мокрый рюкзак.",
-                List.of(new Item("КОМПАС", "Компас")),
-                List.of(new Location.Exit("Уйти в лес", "ЛЕС"))
-        ));
-        locations.put("ЛЕС", new Location(
-                "ЛЕС",
-                "Темный лес. Слышно море и треск веток.",
-                List.of(),
-                List.of(
-                        new Location.Exit("Вернуться на берег", "БЕРЕГ"),
-                        new Location.Exit("Пойти к пещере", "ПЕЩЕРА"),
-                        new Location.Exit("Пойти к руинам", "РУИНЫ")
-                )
-        ));
-        locations.put("ПЕЩЕРА", new Location(
-                "ПЕЩЕРА",
-                "В пещере холодно. В нише виден ржавый ключ.",
-                List.of(new Item("КЛЮЧ", "Ржавый ключ")),
-                List.of(new Location.Exit("Вернуться в лес", "ЛЕС"))
-        ));
-        locations.put("РУИНЫ", new Location(
-                "РУИНЫ",
-                "Перед вами древние руины с закрытыми воротами.",
-                List.of(),
-                List.of(new Location.Exit("Вернуться в лес", "ЛЕС"))
-        ));
-        return new World(locations);
+        World world = new World();
+
+        Location beach = new Location("берег", "Вы стоите на берегу после кораблекрушения.");
+        Location forest = new Location("лес", "Вы находитесь в тёмном лесу.");
+        Location cave = new Location("пещера", "Внутри пещеры холодно и темно.");
+        Location ruins = new Location("руины", "Вы подошли к древним руинам с закрытыми воротами.");
+
+        world.addLocation(beach);
+        world.addLocation(forest);
+        world.addLocation(cave);
+        world.addLocation(ruins);
+
+        Item compass = new Item("компас", "Небольшой металлический компас.");
+        Item key = new Item("ключ", "Старый ржавый ключ.");
+        Npc survivor = new Npc(
+                "выживший",
+                "Изможденный человек у костра.",
+                "Я видел течение на восток. Если соберешь припасы, плыви с утренним ветром."
+        );
+        world.addItem(compass);
+        world.addItem(key);
+        world.addNpc(survivor);
+        world.placeItem("берег", compass.getId());
+        world.placeItem("пещера", key.getId());
+        world.placeNpc("лес", survivor.getId());
+
+        world.addTransition("берег", "лес", null);
+        world.addTransition("лес", "берег", null);
+        world.addTransition("лес", "пещера", null);
+        world.addTransition("пещера", "лес", null);
+        world.addTransition("лес", "руины", (state, w) -> state.getPlayer().getInventory().contains("ключ"));
+        world.addTransition("руины", "лес", null);
+
+        return world;
     }
 
     public record RuntimeQuestDefinition(
@@ -62,4 +65,3 @@ public final class SampleRuntimeQuests {
     ) {
     }
 }
-

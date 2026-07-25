@@ -7,34 +7,27 @@ import java.util.Map;
 import java.util.Set;
 
 public class GameState {
-    private String currentLocationId;
+    private String currentLocation;
     private final Player player;
-    private final Set<String> worldChanges;
-    private final Set<String> knownFacts;
-    private final Set<String> progressFlags;
-    private final Set<String> performedActions;
-    private final Map<String, String> objectStates;
-    private final Map<String, String> characterStates;
-    private final Set<String> removedWorldItems;
+    private final Set<String> worldChanges = new LinkedHashSet<>();
+    private final Set<String> knownFacts = new LinkedHashSet<>();
+    private final Set<String> progressFlags = new LinkedHashSet<>();
+    private final Set<String> performedActions = new LinkedHashSet<>();
+    private final Map<String, String> objectStates = new LinkedHashMap<>();
+    private final Map<String, String> characterStates = new LinkedHashMap<>();
+    private final Set<String> removedWorldItems = new HashSet<>();
 
-    public GameState(String currentLocationId) {
-        this.currentLocationId = currentLocationId;
-        this.player = new Player();
-        this.worldChanges = new LinkedHashSet<>();
-        this.knownFacts = new LinkedHashSet<>();
-        this.progressFlags = new LinkedHashSet<>();
-        this.performedActions = new LinkedHashSet<>();
-        this.objectStates = new LinkedHashMap<>();
-        this.characterStates = new LinkedHashMap<>();
-        this.removedWorldItems = new HashSet<>();
+    public GameState(String currentLocation, Player player) {
+        this.currentLocation = currentLocation;
+        this.player = player;
     }
 
-    public String getCurrentLocationId() {
-        return currentLocationId;
+    public String getCurrentLocation() {
+        return currentLocation;
     }
 
-    public void setCurrentLocationId(String currentLocationId) {
-        this.currentLocationId = currentLocationId;
+    public void setCurrentLocation(String currentLocation) {
+        this.currentLocation = currentLocation;
     }
 
     public Player getPlayer() {

@@ -1,12 +1,14 @@
 package com.myproject.questservice.textruntime;
 
-public class Item {
+public class Npc {
     private final String id;
     private final String description;
+    private final String dialogue;
 
-    public Item(String id, String description) {
+    public Npc(String id, String description, String dialogue) {
         this.id = id;
         this.description = description;
+        this.dialogue = dialogue;
     }
 
     public String getId() {
@@ -17,8 +19,7 @@ public class Item {
         return description;
     }
 
-    // Совместимость со старым API фронта (поле name).
-    public String getName() {
-        return description;
+    public String getDialogue() {
+        return dialogue;
     }
 }
