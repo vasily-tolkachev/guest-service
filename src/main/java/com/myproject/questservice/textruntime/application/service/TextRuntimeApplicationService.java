@@ -144,35 +144,17 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         RuntimeSnapshot snapshot = snapshot(sessionId, engine);
         String sceneId = snapshot.currentLocationId();
         GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
-
-        JsonNode response = aiClient.generate(
-                "Ты генератор действий для текстового квеста. Верни JSON формата {\"actions\":[{\"id\":\"...\",\"label\":\"...\",\"targetId\":\"...\"}]}.\n"
-                        + "targetId должен соответствовать уже существующим целям из контекста.",
-                buildActionsUserPrompt(snapshot)
-        );
         List<RuntimeGenerationStatus.GeneratedAction> actions = new ArrayList<>();
-        for (JsonNode actionNode : response.path("actions")) {
-            String id = actionNode.path("id").asText("").trim();
-            String label = actionNode.path("label").asText("").trim();
-            String targetId = actionNode.path("targetId").asText("").trim();
-            if (label.isBlank() || targetId.isBlank()) {
+        for (RuntimeSnapshot.ActionView action : snapshot.availableActions()) {
+            String targetId = action.targetId();
+            if (targetId == null || targetId.isBlank()) {
                 continue;
             }
             actions.add(new RuntimeGenerationStatus.GeneratedAction(
-                    id.isBlank() ? "generated:" + targetId : id,
-                    label,
+                    action.id() == null || action.id().isBlank() ? "generated:" + targetId : action.id(),
+                    action.description() == null || action.description().isBlank() ? targetId : action.description(),
                     targetId
             ));
-        }
-
-        if (actions.isEmpty()) {
-            for (RuntimeSnapshot.ActionView action : snapshot.availableActions()) {
-                actions.add(new RuntimeGenerationStatus.GeneratedAction(
-                        action.id(),
-                        action.description() == null || action.description().isBlank() ? action.id() : action.description(),
-                        action.targetId()
-                ));
-            }
         }
         state.generatedActions = List.copyOf(actions);
         state.actionsGenerated = true;
@@ -294,17 +276,6 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         sb.append("NPC: ").append(snapshot.npcs().stream().map(RuntimeSnapshot.NpcView::id).toList()).append('\n');
         sb.append("Переходы: ").append(snapshot.exits().stream().map(RuntimeSnapshot.ExitView::targetLocationId).toList()).append('\n');
         sb.append("Сделай короткое, атмосферное, но игровое описание этой сцены.");
-        return sb.toString();
-    }
-
-    private static String buildActionsUserPrompt(RuntimeSnapshot snapshot) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Локация: ").append(snapshot.currentLocationId()).append('\n');
-        sb.append("Описание: ").append(snapshot.description()).append('\n');
-        sb.append("Доступные цели (обязательно использовать только их): ")
-                .append(snapshot.availableActions().stream().map(RuntimeSnapshot.ActionView::targetId).filter(t -> t != null && !t.isBlank()).distinct().toList())
-                .append('\n');
-        sb.append("Сгенерируй список действий для игрока.");
         return sb.toString();
     }
 
