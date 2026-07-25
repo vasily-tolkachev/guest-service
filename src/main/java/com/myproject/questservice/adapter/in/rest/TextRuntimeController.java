@@ -36,11 +36,6 @@ public class TextRuntimeController {
         return runtimeService.startRuntimeQuest(questId);
     }
 
-    @PostMapping("/projects/{projectId}/start")
-    public RuntimeSnapshot start(@PathVariable UUID projectId) {
-        return runtimeService.start(projectId);
-    }
-
     @GetMapping("/sessions/{sessionId}/inspect")
     public RuntimeSnapshot inspect(@PathVariable UUID sessionId) {
         return runtimeService.inspect(sessionId);
