@@ -138,11 +138,18 @@ public class TextRuntimeService {
     private String resolveStartNodeId(List<WorkspaceNode> nodes) {
         for (WorkspaceNode node : nodes) {
             String sourceNode = normalize(node.getSourceNodeId());
-            if (sourceNode.isBlank()) {
-                return normalize(node.getId());
+            String nodeId = normalize(node.getId());
+            if (sourceNode.isBlank() && !nodeId.isBlank()) {
+                return nodeId;
             }
         }
-        return normalize(nodes.get(0).getId());
+        for (WorkspaceNode node : nodes) {
+            String nodeId = normalize(node.getId());
+            if (!nodeId.isBlank()) {
+                return nodeId;
+            }
+        }
+        throw new NotFoundException("Workspace has no valid scene ids");
     }
 
     private static String firstNonBlank(String a, String b, String fallback) {
@@ -163,4 +170,3 @@ public class TextRuntimeService {
     ) {
     }
 }
-
