@@ -23,6 +23,8 @@ public interface TextRuntimeUseCase {
 
     RuntimeActionResult interact(UUID sessionId, String targetId);
 
+    RuntimeSnapshot executeAction(UUID sessionId, String actionId);
+
     String inspectTarget(UUID sessionId, String targetId);
 
     RuntimeGenerationStatus generateScene(UUID sessionId);

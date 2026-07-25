@@ -63,6 +63,11 @@ public class TextRuntimeController {
         return runtimeUseCase.interact(sessionId, request.targetId());
     }
 
+    @PostMapping("/sessions/{sessionId}/execute-action")
+    public RuntimeSnapshot executeAction(@PathVariable UUID sessionId, @Valid @RequestBody ExecuteActionRequest request) {
+        return runtimeUseCase.executeAction(sessionId, request.actionId());
+    }
+
     @PostMapping("/sessions/{sessionId}/inspect-target")
     public InspectTargetResponse inspectTarget(@PathVariable UUID sessionId, @Valid @RequestBody InspectTargetRequest request) {
         return new InspectTargetResponse(runtimeUseCase.inspectTarget(sessionId, request.targetId()));
@@ -93,6 +98,9 @@ public class TextRuntimeController {
     }
 
     public record InteractRequest(@NotBlank String targetId) {
+    }
+
+    public record ExecuteActionRequest(@NotBlank String actionId) {
     }
 
     public record InspectTargetRequest(@NotBlank String targetId) {

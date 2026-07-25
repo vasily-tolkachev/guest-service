@@ -117,6 +117,16 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     }
 
     @Override
+    public RuntimeSnapshot executeAction(UUID sessionId, String actionId) {
+        GameEngine engine = getEngine(sessionId);
+        String message = engine.executeAction(actionId);
+        if (!message.startsWith("Action executed: ")) {
+            throw new IllegalArgumentException(message);
+        }
+        return snapshot(sessionId, engine);
+    }
+
+    @Override
     public String inspectTarget(UUID sessionId, String targetId) {
         GameEngine engine = getEngine(sessionId);
         return engine.inspect(targetId);
@@ -183,7 +193,12 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .map(e -> new RuntimeSnapshot.ExitView(e.actionText(), e.targetLocationId()))
                 .toList();
         List<RuntimeSnapshot.ActionView> worldActions = engine.getAvailableActions().stream()
-                .map(a -> new RuntimeSnapshot.ActionView(a.id(), a.description(), a.targetId(), List.copyOf(a.requiredItems())))
+                .map(a -> new RuntimeSnapshot.ActionView(
+                        a.id(),
+                        formatActionLabel(a),
+                        a.targetId(),
+                        List.copyOf(a.requiredItems())
+                ))
                 .toList();
         // Всегда отдаём действия для UI: world-actions + переходы + предметы + NPC.
         List<RuntimeSnapshot.ActionView> availableActions = new ArrayList<>();
@@ -285,6 +300,31 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
 
     private static String normalizeQuestId(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private static String formatActionLabel(com.myproject.questservice.textruntime.domain.model.World.WorldAction action) {
+        String targetId = action.targetId() == null ? "" : action.targetId().trim();
+        List<String> requiredItems = action.requiredItems() == null ? List.of() : action.requiredItems().stream()
+                .filter(item -> item != null && !item.isBlank())
+                .toList();
+
+        if (!requiredItems.isEmpty() && !targetId.isBlank()) {
+            if (requiredItems.size() == 1) {
+                return "Применить " + requiredItems.get(0) + " к " + targetId;
+            }
+            return "Применить " + String.join(", ", requiredItems) + " к " + targetId;
+        }
+
+        if (!targetId.isBlank()) {
+            String description = action.description() == null ? "" : action.description().trim();
+            if (!description.isBlank()) {
+                return description;
+            }
+            return "Взаимодействовать: " + targetId;
+        }
+
+        String description = action.description() == null ? "" : action.description().trim();
+        return description.isBlank() ? action.id() : description;
     }
 
     private static final class GeneratedSceneState {
