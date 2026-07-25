@@ -33,116 +33,101 @@ public class InMemoryRuntimeQuestCatalogAdapter implements RuntimeQuestCatalogPo
 
         WorldSeed islandSeed = new WorldSeed(
                 List.of(
-                        new LocationSeed("берег", "Вы стоите на берегу после кораблекрушения."),
-                        new LocationSeed("лес", "Вы находитесь в тёмном лесу."),
-                        new LocationSeed("пещера", "Внутри пещеры холодно и темно."),
-                        new LocationSeed("руины", "Вы подошли к древним руинам с закрытыми воротами.")
+                        new LocationSeed("shore", "You stand on a stormy shore after a shipwreck."),
+                        new LocationSeed("forest", "Dark forest with strange marks on trees."),
+                        new LocationSeed("cave", "Cold cave with dripping water."),
+                        new LocationSeed("ruins", "Ancient ruins with a sealed gate.")
                 ),
                 List.of(
-                        new ItemSeed("компас", "Небольшой металлический компас.", "берег"),
-                        new ItemSeed("ключ", "Старый ржавый ключ.", "пещера")
+                        new ItemSeed("compass", "A small metal compass.", "shore"),
+                        new ItemSeed("key", "An old rusty key.", "cave")
                 ),
                 List.of(
-                        new NpcSeed("выживший", "Изможденный человек у костра.", "Я видел течение на восток. Если соберешь припасы, плыви с утренним ветром.", "лес")
+                        new NpcSeed("survivor", "An exhausted survivor by a fire.", "I saw lights near the ruins at night.", "forest")
                 ),
                 List.of(
-                        new TransitionSeed("берег", "лес", null),
-                        new TransitionSeed("лес", "берег", null),
-                        new TransitionSeed("лес", "пещера", null),
-                        new TransitionSeed("пещера", "лес", null),
-                        new TransitionSeed("лес", "руины", "ruins_gate_open"),
-                        new TransitionSeed("руины", "лес", null)
+                        new TransitionSeed("shore", "forest", null),
+                        new TransitionSeed("forest", "shore", null),
+                        new TransitionSeed("forest", "cave", null),
+                        new TransitionSeed("cave", "forest", null),
+                        new TransitionSeed("forest", "ruins", "ruins_gate_open"),
+                        new TransitionSeed("ruins", "forest", null)
                 ),
                 List.of(
                         new ActionSeed(
                                 "open_ruins_gate",
-                                "лес",
-                                "Открыть ворота руин ключом",
+                                "forest",
+                                "Open the ruins gate with key",
                                 "has_key",
                                 "open_ruins_gate",
-                                Set.of("ключ"),
-                                "ворота",
+                                Set.of("key"),
+                                "gate",
                                 Set.of("gate_opened")
-                        ),
-                        new ActionSeed(
-                                "inspect_marks",
-                                "лес",
-                                "Осмотреть метки на дереве",
-                                null,
-                                "add_fact_marks_to_ruins",
-                                Set.of(),
-                                "метки",
-                                Set.of("marks_checked")
                         )
                 )
         );
 
-        WorldSeed stationSeed = new WorldSeed(
+        WorldSeed stationZeroSeed = new WorldSeed(
                 List.of(
-                        new LocationSeed("вестибюль", "Вы в пустом вестибюле исследовательской станции."),
-                        new LocationSeed("коридор", "Узкий коридор, мигает аварийное освещение."),
-                        new LocationSeed("серверная", "Серверная заперта, рядом терминал доступа."),
-                        new LocationSeed("архив", "Архив с бумагами и старой картой здания.")
+                        new LocationSeed("lobby", "You are in the empty station lobby."),
+                        new LocationSeed("archive", "Dusty archive with old logs and route maps."),
+                        new LocationSeed("workshop", "Workshop with broken equipment and spare parts."),
+                        new LocationSeed("server", "Server room door is sealed. Access terminal is nearby."),
+                        new LocationSeed("airlock", "Airlock control panel blinks in emergency mode.")
                 ),
                 List.of(
-                        new ItemSeed("карта", "Схема станции с пометками маршрутов.", "архив"),
-                        new ItemSeed("карта_доступа", "Служебная карта доступа.", "коридор")
+                        new ItemSeed("access_card", "Service access card.", "archive"),
+                        new ItemSeed("fuse", "Industrial power fuse.", "workshop")
                 ),
                 List.of(
-                        new NpcSeed("оператор", "Дежурный оператор по внутренней связи.", "Отключи блокировку через терминал и путь в серверную откроется.", "вестибюль")
+                        new NpcSeed("operator", "Remote operator over intercom.", "If you restore safe power, I can guide evacuation.", "lobby"),
+                        new NpcSeed("technician", "Injured technician near tools.", "I can bypass safety if you want sabotage.", "workshop")
                 ),
                 List.of(
-                        new TransitionSeed("вестибюль", "коридор", null),
-                        new TransitionSeed("коридор", "вестибюль", null),
-                        new TransitionSeed("коридор", "архив", null),
-                        new TransitionSeed("архив", "коридор", null),
-                        new TransitionSeed("коридор", "серверная", "server_door_open"),
-                        new TransitionSeed("серверная", "коридор", null)
+                        new TransitionSeed("lobby", "archive", null),
+                        new TransitionSeed("archive", "lobby", null),
+                        new TransitionSeed("lobby", "workshop", null),
+                        new TransitionSeed("workshop", "lobby", null),
+                        new TransitionSeed("lobby", "server", "server_unlocked"),
+                        new TransitionSeed("server", "lobby", null),
+                        new TransitionSeed("server", "airlock", "airlock_path_open"),
+                        new TransitionSeed("airlock", "server", null)
                 ),
                 List.of(
-                        new ActionSeed(
-                                "unlock_server_room",
-                                "коридор",
-                                "Открыть серверную картой доступа",
-                                "has_access_card",
-                                "open_server_room",
-                                Set.of("карта_доступа"),
-                                "терминал",
-                                Set.of("server_opened")
-                        ),
-                        new ActionSeed(
-                                "inspect_map",
-                                "архив",
-                                "Изучить карту станции",
-                                null,
-                                "add_fact_secret_route",
-                                Set.of(),
-                                "карта",
-                                Set.of("map_checked")
-                        )
+                        // Objects/locations/NPCs lead to different endings.
+                        new ActionSeed("unlock_server", "lobby", "Unlock server room with access card", "has_access_card", "unlock_server", Set.of("access_card"), "terminal", Set.of("path_server")),
+                        new ActionSeed("restore_airlock_power", "server", "Install fuse and restore airlock power", "has_fuse", "restore_airlock_power", Set.of("fuse"), "power_bus", Set.of("path_airlock")),
+                        new ActionSeed("operator_route", "lobby", "Ask operator for evacuation protocol", null, "set_evac_route", Set.of(), "operator", Set.of("route_known")),
+                        new ActionSeed("enable_bypass", "workshop", "Ask technician to enable bypass", null, "enable_bypass", Set.of(), "technician", Set.of("bypass_enabled")),
+                        // Ending 1: evacuation
+                        new ActionSeed("evacuate", "airlock", "Launch evacuation", "can_evacuate", "finish_evacuation", Set.of(), "airlock_panel", Set.of("ending_evac_ready")),
+                        // Ending 2: stabilize station
+                        new ActionSeed("stabilize_core", "server", "Stabilize station core", "can_stabilize", "stabilize_core", Set.of(), "core_console", Set.of("ending_stabilize_ready")),
+                        // Ending 3: sabotage
+                        new ActionSeed("overload_core", "server", "Overload station core", "can_overload", "overload_core", Set.of(), "core_console", Set.of("ending_sabotage_ready"))
                 )
         );
 
         map.put("island_escape", new RuntimeQuestDefinition(
                 "island_escape",
-                "Остров: путь к руинам",
-                "Демо-квест выживания на острове.",
+                "Island Escape",
+                "Short island quest.",
                 buildWorldFromDefinition(islandSeed),
-                "берег"
+                "shore"
         ));
         map.put("shipwreck", new RuntimeQuestDefinition(
                 "shipwreck",
-                "Демо-квест 1",
-                "Совместимый id для уже существующих ссылок.",
+                "Shipwreck",
+                "Compatibility id for old links.",
                 buildWorldFromDefinition(islandSeed),
-                "берег"
+                "shore"
         ));
-        map.put("station_breach", new RuntimeQuestDefinition(
-                "station_breach",
-                "Станция: вскрытие серверной",
-                "Демо-квест на закрытой станции.",
-                buildWorldFromDefinition(stationSeed),
-                "вестибюль"
+        map.put("station_zero", new RuntimeQuestDefinition(
+                "station_zero",
+                "Station Zero",
+                "Small test quest with multiple endings and routes.",
+                buildWorldFromDefinition(stationZeroSeed),
+                "lobby"
         ));
         return map;
     }
@@ -183,10 +168,18 @@ public class InMemoryRuntimeQuestCatalogAdapter implements RuntimeQuestCatalogPo
             return null;
         }
         return switch (conditionKey) {
-            case "ruins_gate_open" -> (state, ignored) -> "открыты".equals(state.getObjectStates().get("ворота_руин"));
-            case "server_door_open" -> (state, ignored) -> "открыта".equals(state.getObjectStates().get("дверь_серверной"));
-            case "has_key" -> (state, ignored) -> state.getPlayer().getInventory().contains("ключ");
-            case "has_access_card" -> (state, ignored) -> state.getPlayer().getInventory().contains("карта_доступа");
+            case "ruins_gate_open" -> (state, ignored) -> "open".equals(state.getObjectStates().get("ruins_gate"));
+            case "has_key" -> (state, ignored) -> state.getPlayer().getInventory().contains("key");
+            case "has_access_card" -> (state, ignored) -> state.getPlayer().getInventory().contains("access_card");
+            case "has_fuse" -> (state, ignored) -> state.getPlayer().getInventory().contains("fuse");
+            case "server_unlocked" -> (state, ignored) -> "open".equals(state.getObjectStates().get("server_door"));
+            case "airlock_path_open" -> (state, ignored) -> "restored".equals(state.getObjectStates().get("airlock_power"));
+            case "can_evacuate" -> (state, ignored) -> "known".equals(state.getObjectStates().get("evac_route"))
+                    && "restored".equals(state.getObjectStates().get("airlock_power"));
+            case "can_stabilize" -> (state, ignored) -> "open".equals(state.getObjectStates().get("server_door"))
+                    && "online".equals(state.getObjectStates().get("operator_state"));
+            case "can_overload" -> (state, ignored) -> "open".equals(state.getObjectStates().get("server_door"))
+                    && "bypass".equals(state.getObjectStates().get("tech_mode"));
             default -> null;
         };
     }
@@ -196,16 +189,23 @@ public class InMemoryRuntimeQuestCatalogAdapter implements RuntimeQuestCatalogPo
             return null;
         }
         return switch (effectKey) {
-            case "open_ruins_gate" -> (state, ignored) -> {
-                state.getObjectStates().put("ворота_руин", "открыты");
-                state.getWorldChanges().add("объект:ворота_руин=открыты");
+            case "open_ruins_gate" -> (state, ignored) -> state.getObjectStates().put("ruins_gate", "open");
+            case "unlock_server" -> (state, ignored) -> state.getObjectStates().put("server_door", "open");
+            case "restore_airlock_power" -> (state, ignored) -> state.getObjectStates().put("airlock_power", "restored");
+            case "set_evac_route" -> (state, ignored) -> {
+                state.getObjectStates().put("evac_route", "known");
+                state.getObjectStates().put("operator_state", "online");
             };
-            case "open_server_room" -> (state, ignored) -> {
-                state.getObjectStates().put("дверь_серверной", "открыта");
-                state.getWorldChanges().add("объект:дверь_серверной=открыта");
+            case "enable_bypass" -> (state, ignored) -> state.getObjectStates().put("tech_mode", "bypass");
+            case "stabilize_core" -> (state, ignored) -> {
+                state.getObjectStates().put("core_state", "stable");
+                state.getKnownFacts().add("ending:stabilization");
             };
-            case "add_fact_marks_to_ruins" -> (state, ignored) -> state.getKnownFacts().add("метки_ведут_к_руинам");
-            case "add_fact_secret_route" -> (state, ignored) -> state.getKnownFacts().add("на_карте_есть_обходной_маршрут");
+            case "overload_core" -> (state, ignored) -> {
+                state.getObjectStates().put("core_state", "overload");
+                state.getKnownFacts().add("ending:sabotage");
+            };
+            case "finish_evacuation" -> (state, ignored) -> state.getKnownFacts().add("ending:evacuation");
             default -> null;
         };
     }
