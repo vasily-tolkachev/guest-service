@@ -110,6 +110,8 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         String message = result.message();
         if (message.startsWith("No interaction available for: ")
                 || message.startsWith("Ambiguous interaction target: ")
+                || message.startsWith("Action id must be executed via execute-action: ")
+                || message.startsWith("Ambiguous action id: ")
                 || message.startsWith("Target is empty")) {
             throw new IllegalArgumentException(message);
         }

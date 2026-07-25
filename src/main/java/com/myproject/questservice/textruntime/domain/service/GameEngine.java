@@ -176,6 +176,20 @@ public class GameEngine {
             return new InteractionResult(move(locationId), "move:" + locationId);
         }
 
+        // 5) Explicitly reject action-id routed to interact.
+        List<World.WorldAction> actionById = getAvailableActions().stream()
+                .filter(action -> action.id() != null && action.id().equalsIgnoreCase(targetId))
+                .toList();
+        if (actionById.size() == 1) {
+            return new InteractionResult(
+                    "Action id must be executed via execute-action: " + targetId,
+                    "error:wrong_endpoint_action_id:" + targetId
+            );
+        }
+        if (actionById.size() > 1) {
+            return new InteractionResult("Ambiguous action id: " + targetId, "error:ambiguous_action_id:" + targetId);
+        }
+
         return new InteractionResult("No interaction available for: " + targetId, "error:no_interaction:" + targetId);
     }
 
