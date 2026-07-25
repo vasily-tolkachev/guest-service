@@ -2,6 +2,7 @@ package com.myproject.questservice.textruntime.application.service;
 
 import com.myproject.questservice.application.service.NotFoundException;
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import com.myproject.questservice.textruntime.application.port.out.RuntimeQuestCatalogPort;
@@ -86,6 +87,24 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
             throw new IllegalArgumentException(message);
         }
         return snapshot(sessionId, engine.inspect());
+    }
+
+    @Override
+    public RuntimeActionResult interact(UUID sessionId, String targetId) {
+        GameEngine engine = getEngine(sessionId);
+        String message = engine.interact(targetId);
+        if (message.startsWith("No interaction available for: ")
+                || message.startsWith("Ambiguous interaction target: ")
+                || message.startsWith("Target is empty")) {
+            throw new IllegalArgumentException(message);
+        }
+        return new RuntimeActionResult(message, snapshot(sessionId, engine.inspect()));
+    }
+
+    @Override
+    public String inspectTarget(UUID sessionId, String targetId) {
+        GameEngine engine = getEngine(sessionId);
+        return engine.inspect(targetId);
     }
 
     private GameEngine getEngine(UUID sessionId) {

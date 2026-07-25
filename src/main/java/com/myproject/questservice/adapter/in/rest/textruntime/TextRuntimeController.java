@@ -1,6 +1,7 @@
 package com.myproject.questservice.adapter.in.rest.textruntime;
 
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import jakarta.validation.Valid;
@@ -56,6 +57,16 @@ public class TextRuntimeController {
         return runtimeUseCase.use(sessionId, request.itemId(), request.targetId());
     }
 
+    @PostMapping("/sessions/{sessionId}/interact")
+    public RuntimeActionResult interact(@PathVariable UUID sessionId, @Valid @RequestBody InteractRequest request) {
+        return runtimeUseCase.interact(sessionId, request.targetId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/inspect-target")
+    public InspectTargetResponse inspectTarget(@PathVariable UUID sessionId, @Valid @RequestBody InspectTargetRequest request) {
+        return new InspectTargetResponse(runtimeUseCase.inspectTarget(sessionId, request.targetId()));
+    }
+
     public record MoveRequest(@NotBlank String locationId) {
     }
 
@@ -63,5 +74,14 @@ public class TextRuntimeController {
     }
 
     public record UseRequest(@NotBlank String itemId, @NotBlank String targetId) {
+    }
+
+    public record InteractRequest(@NotBlank String targetId) {
+    }
+
+    public record InspectTargetRequest(@NotBlank String targetId) {
+    }
+
+    public record InspectTargetResponse(String description) {
     }
 }

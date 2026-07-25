@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Component
 public class SampleRuntimeQuestCatalogAdapter implements RuntimeQuestCatalogPort {
@@ -70,8 +71,35 @@ public class SampleRuntimeQuestCatalogAdapter implements RuntimeQuestCatalogPort
         world.addTransition("лес", "берег", null);
         world.addTransition("лес", "пещера", null);
         world.addTransition("пещера", "лес", null);
-        world.addTransition("лес", "руины", (state, w) -> state.getPlayer().getInventory().contains("ключ"));
+        world.addTransition("лес", "руины", (state, w) -> "открыты".equals(state.getObjectStates().get("ворота_руин")));
         world.addTransition("руины", "лес", null);
+
+        // Тест взаимодействия с world object: interact("ворота") -> executeAction.
+        world.addAction(new World.WorldAction(
+                "open_ruins_gate",
+                "лес",
+                "Открыть ворота руин ключом",
+                (state, w) -> state.getPlayer().getInventory().contains("ключ"),
+                (state, w) -> {
+                    state.getObjectStates().put("ворота_руин", "открыты");
+                    state.getWorldChanges().add("объект:ворота_руин=открыты");
+                },
+                Set.of("ключ"),
+                "ворота",
+                Set.of("gate_opened")
+        ));
+
+        // Ещё один объект для interact/inspect-target.
+        world.addAction(new World.WorldAction(
+                "inspect_marks",
+                "лес",
+                "Осмотреть метки на дереве",
+                null,
+                (state, w) -> state.getKnownFacts().add("метки_ведут_к_руинам"),
+                Set.of(),
+                "метки",
+                Set.of("marks_checked")
+        ));
 
         return world;
     }

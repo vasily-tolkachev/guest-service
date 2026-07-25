@@ -108,6 +108,67 @@ public class GameEngine {
         return npc.getDialogue();
     }
 
+    public String inspect(String targetId) {
+        if (targetId == null || targetId.isBlank()) {
+            return "Target is empty";
+        }
+
+        Location location = world.getLocation(state.getCurrentLocation());
+        if (location != null && location.getId().equalsIgnoreCase(targetId)) {
+            return location.getDescription();
+        }
+
+        String itemKey = findVisibleItem(targetId);
+        if (itemKey != null) {
+            Item item = world.getItem(itemKey);
+            return item == null ? "Item not found: " + targetId : item.getDescription();
+        }
+
+        String npcKey = findVisibleNpc(targetId);
+        if (npcKey != null) {
+            Npc npc = world.getNpc(npcKey);
+            return npc == null ? "NPC not found: " + targetId : npc.getDescription();
+        }
+
+        return "Nothing to inspect: " + targetId;
+    }
+
+    public String interact(String targetId) {
+        if (targetId == null || targetId.isBlank()) {
+            return "Target is empty";
+        }
+
+        // 1) NPC interaction has priority.
+        String npcKey = findVisibleNpc(targetId);
+        if (npcKey != null) {
+            return talk(npcKey);
+        }
+
+        // 2) Try executing world action bound to target in current location.
+        List<World.WorldAction> targetActions = getAvailableActions().stream()
+                .filter(action -> action.targetId() != null && action.targetId().equalsIgnoreCase(targetId))
+                .toList();
+        if (targetActions.size() == 1) {
+            return executeAction(targetActions.get(0).id());
+        }
+        if (targetActions.size() > 1) {
+            return "Ambiguous interaction target: " + targetId;
+        }
+
+        // 3) Item defaults to take (common text-quest behavior).
+        String itemKey = findVisibleItem(targetId);
+        if (itemKey != null) {
+            return take(itemKey);
+        }
+
+        // 4) Location interaction defaults to move.
+        if (isReachableLocation(targetId)) {
+            return move(findReachableLocationId(targetId));
+        }
+
+        return "No interaction available for: " + targetId;
+    }
+
     public InspectResult inspect() {
         Location location = world.getLocation(state.getCurrentLocation());
         if (location == null) {
@@ -181,6 +242,22 @@ public class GameEngine {
         for (String currentNpcId : getVisibleNpcsInCurrentLocation()) {
             if (currentNpcId.equalsIgnoreCase(npcId)) {
                 return currentNpcId;
+            }
+        }
+        return null;
+    }
+
+    private boolean isReachableLocation(String locationId) {
+        return findReachableLocationId(locationId) != null;
+    }
+
+    private String findReachableLocationId(String locationId) {
+        for (World.Transition transition : world.getTransitionsFrom(state.getCurrentLocation())) {
+            if (!transition.toId().equalsIgnoreCase(locationId)) {
+                continue;
+            }
+            if (transition.condition() == null || transition.condition().test(state, world)) {
+                return transition.toId();
             }
         }
         return null;
