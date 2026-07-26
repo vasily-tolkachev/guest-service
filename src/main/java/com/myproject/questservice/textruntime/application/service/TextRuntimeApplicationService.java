@@ -340,14 +340,6 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 continue;
             }
 
-            // Keep only executable options in generated list:
-            // - move:* (route to move endpoint)
-            // - world action ids (route to execute-action endpoint)
-            // Skip synthetic item:/npc: interaction wrappers to avoid wrong-endpoint calls.
-            if (actionId.startsWith("item:") || actionId.startsWith("npc:")) {
-                continue;
-            }
-
             if (actionId.startsWith("move:") && targetId.isBlank()) {
                 continue;
             }
@@ -480,10 +472,6 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         List<RuntimeGenerationStatus.GeneratedAction> safeActions = (state.generatedActions == null ? List.<RuntimeGenerationStatus.GeneratedAction>of() : state.generatedActions)
                 .stream()
                 .filter(action -> action != null && action.id() != null)
-                .filter(action -> {
-                    String id = action.id().trim();
-                    return !id.startsWith("item:") && !id.startsWith("npc:");
-                })
                 .toList();
         return new RuntimeGenerationStatus(
                 sessionId,
