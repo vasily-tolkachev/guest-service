@@ -3,10 +3,15 @@ package com.myproject.questservice.adapter.in.rest.textruntime;
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +36,18 @@ public class TextRuntimeController {
     @GetMapping("/quests")
     public List<RuntimeQuestSummary> listRuntimeQuests() {
         return runtimeUseCase.listRuntimeQuests();
+    }
+
+    @GetMapping("/quests/{questId}/export")
+    public ResponseEntity<RuntimeQuestExport> exportQuest(@PathVariable String questId) {
+        RuntimeQuestExport payload = runtimeUseCase.exportRuntimeQuest(questId);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename((payload.id() == null || payload.id().isBlank() ? "runtime-quest" : payload.id()) + ".json")
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(payload);
     }
 
     @PostMapping("/quests/{questId}/start")

@@ -6,6 +6,7 @@ import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import com.myproject.questservice.textruntime.application.port.out.RuntimeQuestCatalogPort;
@@ -13,6 +14,7 @@ import com.myproject.questservice.textruntime.application.port.out.RuntimeSessio
 import com.myproject.questservice.textruntime.domain.model.GameState;
 import com.myproject.questservice.textruntime.domain.model.Player;
 import com.myproject.questservice.textruntime.domain.model.RuntimeQuestDefinition;
+import com.myproject.questservice.textruntime.domain.model.World;
 import com.myproject.questservice.textruntime.domain.service.GameEngine;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +49,90 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         return questCatalogPort.findAll().stream()
                 .map(def -> new RuntimeQuestSummary(def.id(), def.name(), def.description()))
                 .toList();
+    }
+
+    @Override
+    public RuntimeQuestExport exportRuntimeQuest(String questId) {
+        RuntimeQuestDefinition definition = questCatalogPort.findById(normalizeQuestId(questId))
+                .orElseThrow(() -> new NotFoundException("Runtime quest not found"));
+        World world = definition.world();
+
+        List<RuntimeQuestExport.LocationView> locations = world.getLocations().stream()
+                .map(location -> new RuntimeQuestExport.LocationView(location.getId(), location.getDescription()))
+                .toList();
+
+        List<RuntimeQuestExport.ItemView> items = locations.stream()
+                .flatMap(location -> world.getInitialItemsInLocation(location.id()).stream())
+                .distinct()
+                .map(world::getItem)
+                .filter(item -> item != null)
+                .map(item -> new RuntimeQuestExport.ItemView(item.getId(), item.getDescription()))
+                .toList();
+
+        List<RuntimeQuestExport.NpcView> npcs = locations.stream()
+                .flatMap(location -> world.getInitialNpcsInLocation(location.id()).stream())
+                .distinct()
+                .map(world::getNpc)
+                .filter(npc -> npc != null)
+                .map(npc -> new RuntimeQuestExport.NpcView(npc.getId(), npc.getDescription(), npc.getDialogue()))
+                .toList();
+
+        Map<String, List<String>> locationItems = locations.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        RuntimeQuestExport.LocationView::id,
+                        location -> world.getInitialItemsInLocation(location.id()).stream().toList(),
+                        (left, right) -> left,
+                        java.util.LinkedHashMap::new
+                ));
+
+        Map<String, List<String>> locationNpcs = locations.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        RuntimeQuestExport.LocationView::id,
+                        location -> world.getInitialNpcsInLocation(location.id()).stream().toList(),
+                        (left, right) -> left,
+                        java.util.LinkedHashMap::new
+                ));
+
+        List<RuntimeQuestExport.TransitionView> transitions = locations.stream()
+                .flatMap(location -> world.getTransitionsFrom(location.id()).stream())
+                .map(transition -> new RuntimeQuestExport.TransitionView(
+                        transition.fromId(),
+                        transition.toId(),
+                        transition.condition() != null
+                ))
+                .toList();
+
+        List<RuntimeQuestExport.ActionView> actions = world.getActions().stream()
+                .map(action -> new RuntimeQuestExport.ActionView(
+                        action.id(),
+                        action.locationId(),
+                        action.description(),
+                        action.targetId(),
+                        action.requiredItems().stream().toList(),
+                        action.progressFlagsToSet().stream().toList(),
+                        action.condition() != null,
+                        action.effect() != null
+                ))
+                .toList();
+
+        List<RuntimeQuestExport.EndingView> endings = world.getEndings().stream()
+                .map(ending -> new RuntimeQuestExport.EndingView(ending.id(), ending.condition() != null))
+                .toList();
+
+        return new RuntimeQuestExport(
+                definition.id(),
+                definition.name(),
+                definition.description(),
+                definition.startLocationId(),
+                locations,
+                items,
+                npcs,
+                locationItems,
+                locationNpcs,
+                transitions,
+                actions,
+                endings
+        );
     }
 
     @Override
@@ -158,14 +244,32 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
         List<RuntimeGenerationStatus.GeneratedAction> actions = new ArrayList<>();
         for (RuntimeSnapshot.ActionView action : snapshot.availableActions()) {
-            String targetId = action.targetId();
-            if (targetId == null || targetId.isBlank()) {
+            String actionId = action.id() == null ? "" : action.id().trim();
+            String targetId = action.targetId() == null ? "" : action.targetId().trim();
+            if (actionId.isBlank()) {
                 continue;
             }
+
+            // Keep only executable options in generated list:
+            // - move:* (route to move endpoint)
+            // - world action ids (route to execute-action endpoint)
+            // Skip synthetic item:/npc: interaction wrappers to avoid wrong-endpoint calls.
+            if (actionId.startsWith("item:") || actionId.startsWith("npc:")) {
+                continue;
+            }
+
+            if (actionId.startsWith("move:") && targetId.isBlank()) {
+                continue;
+            }
+
+            String label = action.description() == null || action.description().isBlank()
+                    ? (targetId.isBlank() ? actionId : targetId)
+                    : action.description();
+
             actions.add(new RuntimeGenerationStatus.GeneratedAction(
-                    action.id() == null || action.id().isBlank() ? "generated:" + targetId : action.id(),
-                    action.description() == null || action.description().isBlank() ? targetId : action.description(),
-                    targetId
+                    actionId,
+                    label,
+                    targetId.isBlank() ? null : targetId
             ));
         }
         state.generatedActions = List.copyOf(actions);
@@ -279,13 +383,21 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     }
 
     private RuntimeGenerationStatus toStatus(UUID sessionId, String sceneId, GeneratedSceneState state) {
+        List<RuntimeGenerationStatus.GeneratedAction> safeActions = (state.generatedActions == null ? List.<RuntimeGenerationStatus.GeneratedAction>of() : state.generatedActions)
+                .stream()
+                .filter(action -> action != null && action.id() != null)
+                .filter(action -> {
+                    String id = action.id().trim();
+                    return !id.startsWith("item:") && !id.startsWith("npc:");
+                })
+                .toList();
         return new RuntimeGenerationStatus(
                 sessionId,
                 sceneId,
                 state.sceneGenerated,
                 state.actionsGenerated,
                 state.generatedSceneText,
-                state.generatedActions == null ? List.of() : state.generatedActions
+                safeActions
         );
     }
 

@@ -3,6 +3,7 @@ package com.myproject.questservice.textruntime.application.port.in;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 
 import java.util.List;
@@ -10,6 +11,8 @@ import java.util.UUID;
 
 public interface TextRuntimeUseCase {
     List<RuntimeQuestSummary> listRuntimeQuests();
+
+    RuntimeQuestExport exportRuntimeQuest(String questId);
 
     RuntimeSnapshot startRuntimeQuest(String questId);
 
