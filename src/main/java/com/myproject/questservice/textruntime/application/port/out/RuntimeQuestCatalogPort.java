@@ -9,4 +9,6 @@ public interface RuntimeQuestCatalogPort {
     List<RuntimeQuestDefinition> findAll();
 
     Optional<RuntimeQuestDefinition> findById(String questId);
+
+    void save(RuntimeQuestDefinition definition);
 }

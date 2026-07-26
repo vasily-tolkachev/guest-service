@@ -7,6 +7,7 @@ import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUse
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestImportRequest;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import com.myproject.questservice.textruntime.application.port.out.RuntimeQuestCatalogPort;
@@ -49,6 +50,69 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         return questCatalogPort.findAll().stream()
                 .map(def -> new RuntimeQuestSummary(def.id(), def.name(), def.description()))
                 .toList();
+    }
+
+    @Override
+    public RuntimeQuestSummary importRuntimeQuest(RuntimeQuestImportRequest request) {
+        World world = new World();
+
+        for (RuntimeQuestImportRequest.LocationView location : request.locations()) {
+            world.addLocation(new com.myproject.questservice.textruntime.domain.model.Location(location.id(), location.description()));
+        }
+        for (RuntimeQuestImportRequest.ItemView item : request.items()) {
+            world.addItem(new com.myproject.questservice.textruntime.domain.model.Item(item.id(), item.description()));
+        }
+        for (RuntimeQuestImportRequest.NpcView npc : request.npcs()) {
+            world.addNpc(new com.myproject.questservice.textruntime.domain.model.Npc(npc.id(), npc.description(), npc.dialogue()));
+        }
+
+        for (Map.Entry<String, List<String>> entry : request.locationItems().entrySet()) {
+            String locationId = entry.getKey();
+            for (String itemId : entry.getValue() == null ? List.<String>of() : entry.getValue()) {
+                world.placeItem(locationId, itemId);
+            }
+        }
+        for (Map.Entry<String, List<String>> entry : request.locationNpcs().entrySet()) {
+            String locationId = entry.getKey();
+            for (String npcId : entry.getValue() == null ? List.<String>of() : entry.getValue()) {
+                world.placeNpc(locationId, npcId);
+            }
+        }
+
+        for (RuntimeQuestImportRequest.TransitionView transition : request.transitions()) {
+            world.addTransition(
+                    transition.fromId(),
+                    transition.toId(),
+                    toCondition(transition.condition())
+            );
+        }
+
+        for (RuntimeQuestImportRequest.ActionView action : request.actions()) {
+            world.addAction(new World.WorldAction(
+                    action.id(),
+                    action.locationId(),
+                    action.description(),
+                    toCondition(action.condition()),
+                    toEffect(action.effects()),
+                    action.requiredItems() == null ? Set.of() : action.requiredItems(),
+                    action.targetId(),
+                    action.progressFlagsToSet() == null ? Set.of() : action.progressFlagsToSet()
+            ));
+        }
+
+        for (RuntimeQuestImportRequest.EndingView ending : request.endings()) {
+            world.addEnding(new World.Ending(ending.id(), toCondition(ending.condition())));
+        }
+
+        RuntimeQuestDefinition definition = new RuntimeQuestDefinition(
+                normalizeQuestId(request.id()),
+                request.name(),
+                request.description(),
+                world,
+                request.startLocationId()
+        );
+        questCatalogPort.save(definition);
+        return new RuntimeQuestSummary(definition.id(), definition.name(), definition.description());
     }
 
     @Override
@@ -414,6 +478,89 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
 
     private static String normalizeQuestId(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private static World.Condition toCondition(RuntimeQuestImportRequest.ConditionSpec spec) {
+        if (spec == null || spec.type() == null || spec.type().isBlank()) {
+            return null;
+        }
+        return switch (spec.type().trim().toUpperCase()) {
+            case "ALWAYS" -> (state, world) -> true;
+            case "HAS_ITEM" -> (state, world) -> spec.value() != null && state.getPlayer().getInventory().contains(spec.value());
+            case "HAS_FACT" -> (state, world) -> spec.value() != null && state.getKnownFacts().contains(spec.value());
+            case "FLAG" -> (state, world) -> spec.value() != null && state.getProgressFlags().contains(spec.value());
+            case "OBJECT_STATE" -> (state, world) -> spec.key() != null && spec.value() != null && spec.value().equals(state.getObjectStates().get(spec.key()));
+            case "CHARACTER_STATE" -> (state, world) -> spec.key() != null && spec.value() != null && spec.value().equals(state.getCharacterStates().get(spec.key()));
+            case "NOT" -> {
+                World.Condition child = toCondition(spec.condition());
+                yield child == null ? null : (state, world) -> !child.test(state, world);
+            }
+            case "AND" -> {
+                List<World.Condition> children = (spec.conditions() == null ? List.<RuntimeQuestImportRequest.ConditionSpec>of() : spec.conditions())
+                        .stream()
+                        .map(TextRuntimeApplicationService::toCondition)
+                        .filter(c -> c != null)
+                        .toList();
+                yield (state, world) -> children.stream().allMatch(c -> c.test(state, world));
+            }
+            case "OR" -> {
+                List<World.Condition> children = (spec.conditions() == null ? List.<RuntimeQuestImportRequest.ConditionSpec>of() : spec.conditions())
+                        .stream()
+                        .map(TextRuntimeApplicationService::toCondition)
+                        .filter(c -> c != null)
+                        .toList();
+                yield (state, world) -> children.stream().anyMatch(c -> c.test(state, world));
+            }
+            default -> null;
+        };
+    }
+
+    private static World.Effect toEffect(List<RuntimeQuestImportRequest.EffectSpec> specs) {
+        List<RuntimeQuestImportRequest.EffectSpec> effects = specs == null ? List.of() : specs;
+        if (effects.isEmpty()) {
+            return null;
+        }
+        return (state, world) -> {
+            for (RuntimeQuestImportRequest.EffectSpec effect : effects) {
+                if (effect == null || effect.type() == null || effect.type().isBlank()) {
+                    continue;
+                }
+                switch (effect.type().trim().toUpperCase()) {
+                    case "SET_OBJECT_STATE" -> {
+                        if (effect.key() != null && effect.value() != null) {
+                            state.getObjectStates().put(effect.key(), effect.value());
+                        }
+                    }
+                    case "SET_CHARACTER_STATE" -> {
+                        if (effect.key() != null && effect.value() != null) {
+                            state.getCharacterStates().put(effect.key(), effect.value());
+                        }
+                    }
+                    case "ADD_FACT" -> {
+                        if (effect.value() != null) {
+                            state.getKnownFacts().add(effect.value());
+                        }
+                    }
+                    case "ADD_FLAG" -> {
+                        if (effect.value() != null) {
+                            state.getProgressFlags().add(effect.value());
+                        }
+                    }
+                    case "ADD_ITEM" -> {
+                        if (effect.value() != null) {
+                            state.getPlayer().getInventory().add(effect.value());
+                        }
+                    }
+                    case "REMOVE_ITEM" -> {
+                        if (effect.value() != null) {
+                            state.getPlayer().getInventory().remove(effect.value());
+                        }
+                    }
+                    default -> {
+                    }
+                }
+            }
+        };
     }
 
     private static String formatActionLabel(com.myproject.questservice.textruntime.domain.model.World.WorldAction action) {

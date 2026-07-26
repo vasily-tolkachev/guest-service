@@ -4,6 +4,7 @@ import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUse
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestImportRequest;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 import jakarta.validation.Valid;
@@ -36,6 +37,11 @@ public class TextRuntimeController {
     @GetMapping("/quests")
     public List<RuntimeQuestSummary> listRuntimeQuests() {
         return runtimeUseCase.listRuntimeQuests();
+    }
+
+    @PostMapping("/quests/import")
+    public RuntimeQuestSummary importQuest(@Valid @RequestBody RuntimeQuestImportRequest request) {
+        return runtimeUseCase.importRuntimeQuest(request);
     }
 
     @GetMapping("/quests/{questId}/export")

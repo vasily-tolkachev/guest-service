@@ -4,6 +4,7 @@ import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQue
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
+import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestImportRequest;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
 
 import java.util.List;
@@ -13,6 +14,8 @@ public interface TextRuntimeUseCase {
     List<RuntimeQuestSummary> listRuntimeQuests();
 
     RuntimeQuestExport exportRuntimeQuest(String questId);
+
+    RuntimeQuestSummary importRuntimeQuest(RuntimeQuestImportRequest request);
 
     RuntimeSnapshot startRuntimeQuest(String questId);
 
