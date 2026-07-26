@@ -34,6 +34,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     private final RuntimeSessionStorePort sessionStorePort;
     private final AiClient aiClient;
     private final Map<UUID, Map<String, GeneratedSceneState>> generatedBySession = new ConcurrentHashMap<>();
+    private final Map<UUID, RuntimeQuestDefinition> questBySession = new ConcurrentHashMap<>();
 
     public TextRuntimeApplicationService(
             RuntimeQuestCatalogPort questCatalogPort,
@@ -113,12 +114,18 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
             world.addEnding(new World.Ending(ending.id(), toCondition(ending.condition())));
         }
 
+        List<RuntimeQuestDefinition.Objective> objectives = (request.objectives() == null ? List.<RuntimeQuestImportRequest.ObjectiveView>of() : request.objectives()).stream()
+                .map(TextRuntimeApplicationService::toObjective)
+                .filter(objective -> objective != null)
+                .toList();
+
         RuntimeQuestDefinition definition = new RuntimeQuestDefinition(
                 normalizeQuestId(request.id()),
                 request.name(),
                 request.description(),
                 world,
-                request.startLocationId()
+                request.startLocationId(),
+                objectives
         );
         questCatalogPort.save(definition, request);
         return new RuntimeQuestSummary(definition.id(), definition.name(), definition.description());
@@ -209,6 +216,9 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                         action.effect() != null
                 ))
                 .toList();
+        List<RuntimeQuestImportRequest.ObjectiveView> objectives = definition.objectives().stream()
+                .map(TextRuntimeApplicationService::toObjectiveView)
+                .toList();
 
         List<RuntimeQuestImportRequest.EndingView> endings = world.getEndings().stream()
                 .map(ending -> new RuntimeQuestImportRequest.EndingView(ending.id(), null, ending.condition() != null))
@@ -228,6 +238,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 locationObjects,
                 transitions,
                 actions,
+                objectives,
                 endings
         );
     }
@@ -242,6 +253,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         );
         UUID sessionId = UUID.randomUUID();
         sessionStorePort.save(sessionId, engine);
+        questBySession.put(sessionId, definition);
         generatedBySession.put(sessionId, new ConcurrentHashMap<>());
         refreshGeneratedActions(sessionId, engine);
         return snapshot(sessionId, engine);
@@ -467,6 +479,10 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         List<RuntimeSnapshot.ItemView> inventory = inspect.inventory().stream()
                 .map(i -> new RuntimeSnapshot.ItemView(i.getId(), i.getName()))
                 .toList();
+        RuntimeQuestDefinition definition = questBySession.get(sessionId);
+        List<RuntimeSnapshot.ObjectiveView> objectives = definition == null ? List.of() : definition.objectives().stream()
+                .map(objective -> toSnapshotObjective(objective, engine.getState(), definition.world()))
+                .toList();
         return new RuntimeSnapshot(
                 sessionId,
                 inspect.location().getId(),
@@ -477,6 +493,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 inventory,
                 npcs,
                 objects,
+                objectives,
                 List.copyOf(engine.getState().getKnownFacts()),
                 Map.copyOf(engine.getState().getObjectStates()),
                 Map.copyOf(engine.getState().getCharacterStates())
@@ -517,6 +534,53 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
 
     private static String normalizeQuestId(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private static RuntimeQuestDefinition.Objective toObjective(RuntimeQuestImportRequest.ObjectiveView view) {
+        if (view == null) {
+            return null;
+        }
+        List<RuntimeQuestDefinition.Objective> children = (view.children() == null ? List.<RuntimeQuestImportRequest.ObjectiveView>of() : view.children()).stream()
+                .map(TextRuntimeApplicationService::toObjective)
+                .filter(child -> child != null)
+                .toList();
+        return new RuntimeQuestDefinition.Objective(
+                view.id(),
+                view.title(),
+                view.description(),
+                toCondition(view.condition()),
+                children
+        );
+    }
+
+    private static RuntimeQuestImportRequest.ObjectiveView toObjectiveView(RuntimeQuestDefinition.Objective objective) {
+        List<RuntimeQuestImportRequest.ObjectiveView> children = objective.children().stream()
+                .map(TextRuntimeApplicationService::toObjectiveView)
+                .toList();
+        return new RuntimeQuestImportRequest.ObjectiveView(
+                objective.id(),
+                objective.title(),
+                objective.description(),
+                null,
+                objective.condition() != null,
+                children
+        );
+    }
+
+    private static RuntimeSnapshot.ObjectiveView toSnapshotObjective(RuntimeQuestDefinition.Objective objective, GameState state, World world) {
+        List<RuntimeSnapshot.ObjectiveView> children = objective.children().stream()
+                .map(child -> toSnapshotObjective(child, state, world))
+                .toList();
+        boolean selfCompleted = objective.condition() != null && objective.condition().test(state, world);
+        boolean childrenCompleted = !children.isEmpty() && children.stream().allMatch(RuntimeSnapshot.ObjectiveView::completed);
+        boolean completed = selfCompleted || childrenCompleted;
+        return new RuntimeSnapshot.ObjectiveView(
+                objective.id(),
+                objective.title(),
+                objective.description(),
+                completed,
+                children
+        );
     }
 
     private static World.Condition toCondition(RuntimeQuestImportRequest.ConditionSpec spec) {

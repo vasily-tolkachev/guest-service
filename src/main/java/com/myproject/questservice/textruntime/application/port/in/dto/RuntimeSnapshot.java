@@ -14,6 +14,7 @@ public record RuntimeSnapshot(
         List<ItemView> inventory,
         List<NpcView> npcs,
         List<ObjectView> objects,
+        List<ObjectiveView> objectives,
         List<String> knownFacts,
         Map<String, String> objectStates,
         Map<String, String> characterStates
@@ -31,5 +32,8 @@ public record RuntimeSnapshot(
     }
 
     public record ObjectView(String id, String description) {
+    }
+
+    public record ObjectiveView(String id, String title, String description, boolean completed, List<ObjectiveView> children) {
     }
 }

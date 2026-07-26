@@ -22,6 +22,7 @@ public record RuntimeQuestImportRequest(
         Map<String, List<String>> locationObjects,
         @NotNull @Valid List<TransitionView> transitions,
         @NotNull @Valid List<ActionView> actions,
+        @Valid List<ObjectiveView> objectives,
         @NotNull @Valid List<EndingView> endings
 ) {
     public record LocationView(@NotBlank String id, @NotBlank String description) {}
@@ -50,6 +51,15 @@ public record RuntimeQuestImportRequest(
             @Valid List<EffectSpec> effects,
             Boolean hasCondition,
             Boolean hasEffect
+    ) {}
+
+    public record ObjectiveView(
+            @NotBlank String id,
+            @NotBlank String title,
+            String description,
+            @Valid ConditionSpec condition,
+            Boolean hasCondition,
+            @Valid List<ObjectiveView> children
     ) {}
 
     public record EndingView(
