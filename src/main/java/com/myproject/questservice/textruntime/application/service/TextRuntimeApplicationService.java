@@ -236,6 +236,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         UUID sessionId = UUID.randomUUID();
         sessionStorePort.save(sessionId, engine);
         generatedBySession.put(sessionId, new ConcurrentHashMap<>());
+        refreshGeneratedActions(sessionId, engine);
         return snapshot(sessionId, engine);
     }
 
@@ -251,6 +252,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         if (!message.startsWith("Moved to ")) {
             throw new IllegalArgumentException(message);
         }
+        refreshGeneratedActions(sessionId, engine);
         return snapshot(sessionId, engine);
     }
 
@@ -261,6 +263,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         if (!message.startsWith("Item added to inventory: ")) {
             throw new IllegalArgumentException(message);
         }
+        refreshGeneratedActions(sessionId, engine);
         return snapshot(sessionId, engine);
     }
 
@@ -276,6 +279,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 || message.startsWith("Unknown action: ")) {
             throw new IllegalArgumentException(message);
         }
+        refreshGeneratedActions(sessionId, engine);
         return snapshot(sessionId, engine);
     }
 
@@ -291,6 +295,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 || message.startsWith("Target is empty")) {
             throw new IllegalArgumentException(message);
         }
+        refreshGeneratedActions(sessionId, engine);
         return new RuntimeActionResult(message, snapshot(sessionId, engine), result.engineAction());
     }
 
@@ -301,6 +306,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         if (!message.startsWith("Action executed: ")) {
             throw new IllegalArgumentException(message);
         }
+        refreshGeneratedActions(sessionId, engine);
         return snapshot(sessionId, engine);
     }
 
@@ -329,25 +335,39 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
     @Override
     public RuntimeGenerationStatus generateActions(UUID sessionId) {
         GameEngine engine = getEngine(sessionId);
+        refreshGeneratedActions(sessionId, engine);
         RuntimeSnapshot snapshot = snapshot(sessionId, engine);
         String sceneId = snapshot.currentLocationId();
         GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
+        return toStatus(sessionId, sceneId, state);
+    }
+
+    @Override
+    public RuntimeGenerationStatus generationStatus(UUID sessionId) {
+        GameEngine engine = getEngine(sessionId);
+        refreshGeneratedActions(sessionId, engine);
+        String sceneId = engine.inspect().location().getId();
+        GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
+        return toStatus(sessionId, sceneId, state);
+    }
+
+    private void refreshGeneratedActions(UUID sessionId, GameEngine engine) {
+        RuntimeSnapshot current = snapshot(sessionId, engine);
+        String sceneId = current.currentLocationId();
+        GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
         List<RuntimeGenerationStatus.GeneratedAction> actions = new ArrayList<>();
-        for (RuntimeSnapshot.ActionView action : snapshot.availableActions()) {
+        for (RuntimeSnapshot.ActionView action : current.availableActions()) {
             String actionId = action.id() == null ? "" : action.id().trim();
             String targetId = action.targetId() == null ? "" : action.targetId().trim();
             if (actionId.isBlank()) {
                 continue;
             }
-
             if (actionId.startsWith("move:") && targetId.isBlank()) {
                 continue;
             }
-
             String label = action.description() == null || action.description().isBlank()
                     ? (targetId.isBlank() ? actionId : targetId)
                     : action.description();
-
             actions.add(new RuntimeGenerationStatus.GeneratedAction(
                     actionId,
                     label,
@@ -356,15 +376,6 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         }
         state.generatedActions = List.copyOf(actions);
         state.actionsGenerated = true;
-        return toStatus(sessionId, sceneId, state);
-    }
-
-    @Override
-    public RuntimeGenerationStatus generationStatus(UUID sessionId) {
-        GameEngine engine = getEngine(sessionId);
-        String sceneId = engine.inspect().location().getId();
-        GeneratedSceneState state = getGeneratedState(sessionId, sceneId);
-        return toStatus(sessionId, sceneId, state);
     }
 
     private GameEngine getEngine(UUID sessionId) {
