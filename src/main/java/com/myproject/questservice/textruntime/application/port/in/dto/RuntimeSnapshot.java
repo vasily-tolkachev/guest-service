@@ -1,6 +1,7 @@
 package com.myproject.questservice.textruntime.application.port.in.dto;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record RuntimeSnapshot(
@@ -13,7 +14,9 @@ public record RuntimeSnapshot(
         List<ItemView> inventory,
         List<NpcView> npcs,
         List<ObjectView> objects,
-        List<String> knownFacts
+        List<String> knownFacts,
+        Map<String, String> objectStates,
+        Map<String, String> characterStates
 ) {
     public record ItemView(String id, String name) {
     }

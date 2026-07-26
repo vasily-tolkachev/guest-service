@@ -470,7 +470,9 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 inventory,
                 npcs,
                 objects,
-                List.copyOf(engine.getState().getKnownFacts())
+                List.copyOf(engine.getState().getKnownFacts()),
+                Map.copyOf(engine.getState().getObjectStates()),
+                Map.copyOf(engine.getState().getCharacterStates())
         );
     }
 
