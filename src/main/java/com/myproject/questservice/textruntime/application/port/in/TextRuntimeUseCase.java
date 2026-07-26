@@ -13,7 +13,7 @@ import java.util.UUID;
 public interface TextRuntimeUseCase {
     List<RuntimeQuestSummary> listRuntimeQuests();
 
-    RuntimeQuestExport exportRuntimeQuest(String questId);
+    RuntimeQuestImportRequest exportRuntimeQuest(String questId);
 
     RuntimeQuestSummary importRuntimeQuest(RuntimeQuestImportRequest request);
 

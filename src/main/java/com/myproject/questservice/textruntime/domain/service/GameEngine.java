@@ -81,6 +81,14 @@ public class GameEngine {
                 if (action.locationId() != null && !action.locationId().equals(state.getCurrentLocation())) {
                     return "Action is not available in this location";
                 }
+                if (!action.requiredItems().isEmpty()) {
+                    boolean hasAllRequiredItems = action.requiredItems().stream()
+                            .allMatch(requiredItem -> state.getPlayer().getInventory().stream()
+                                    .anyMatch(inventoryItem -> inventoryItem.equalsIgnoreCase(requiredItem)));
+                    if (!hasAllRequiredItems) {
+                        return "Action required items are missing";
+                    }
+                }
                 if (action.condition() != null && !action.condition().test(state, world)) {
                     return "Action conditions are not met";
                 }

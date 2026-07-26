@@ -6,7 +6,6 @@ import com.myproject.questservice.application.port.out.generator.AiClient;
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
-import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestImportRequest;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
@@ -121,46 +120,51 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 world,
                 request.startLocationId()
         );
-        questCatalogPort.save(definition);
+        questCatalogPort.save(definition, request);
         return new RuntimeQuestSummary(definition.id(), definition.name(), definition.description());
     }
 
     @Override
-    public RuntimeQuestExport exportRuntimeQuest(String questId) {
+    public RuntimeQuestImportRequest exportRuntimeQuest(String questId) {
+        RuntimeQuestImportRequest source = questCatalogPort.findSourceById(normalizeQuestId(questId)).orElse(null);
+        if (source != null) {
+            return source;
+        }
+
         RuntimeQuestDefinition definition = questCatalogPort.findById(normalizeQuestId(questId))
                 .orElseThrow(() -> new NotFoundException("Runtime quest not found"));
         World world = definition.world();
 
-        List<RuntimeQuestExport.LocationView> locations = world.getLocations().stream()
-                .map(location -> new RuntimeQuestExport.LocationView(location.getId(), location.getDescription()))
+        List<RuntimeQuestImportRequest.LocationView> locations = world.getLocations().stream()
+                .map(location -> new RuntimeQuestImportRequest.LocationView(location.getId(), location.getDescription()))
                 .toList();
 
-        List<RuntimeQuestExport.ItemView> items = locations.stream()
+        List<RuntimeQuestImportRequest.ItemView> items = locations.stream()
                 .flatMap(location -> world.getInitialItemsInLocation(location.id()).stream())
                 .distinct()
                 .map(world::getItem)
                 .filter(item -> item != null)
-                .map(item -> new RuntimeQuestExport.ItemView(item.getId(), item.getDescription()))
+                .map(item -> new RuntimeQuestImportRequest.ItemView(item.getId(), item.getDescription()))
                 .toList();
 
-        List<RuntimeQuestExport.NpcView> npcs = locations.stream()
+        List<RuntimeQuestImportRequest.NpcView> npcs = locations.stream()
                 .flatMap(location -> world.getInitialNpcsInLocation(location.id()).stream())
                 .distinct()
                 .map(world::getNpc)
                 .filter(npc -> npc != null)
-                .map(npc -> new RuntimeQuestExport.NpcView(npc.getId(), npc.getDescription(), npc.getDialogue()))
+                .map(npc -> new RuntimeQuestImportRequest.NpcView(npc.getId(), npc.getDescription(), npc.getDialogue()))
                 .toList();
-        List<RuntimeQuestExport.ObjectView> worldObjects = locations.stream()
+        List<RuntimeQuestImportRequest.ObjectView> worldObjects = locations.stream()
                 .flatMap(location -> world.getInitialObjectsInLocation(location.id()).stream())
                 .distinct()
                 .map(world::getWorldObject)
                 .filter(worldObject -> worldObject != null)
-                .map(worldObject -> new RuntimeQuestExport.ObjectView(worldObject.getId(), worldObject.getDescription()))
+                .map(worldObject -> new RuntimeQuestImportRequest.ObjectView(worldObject.getId(), worldObject.getDescription()))
                 .toList();
 
         Map<String, List<String>> locationItems = locations.stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        RuntimeQuestExport.LocationView::id,
+                        RuntimeQuestImportRequest.LocationView::id,
                         location -> world.getInitialItemsInLocation(location.id()).stream().toList(),
                         (left, right) -> left,
                         java.util.LinkedHashMap::new
@@ -168,46 +172,49 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
 
         Map<String, List<String>> locationNpcs = locations.stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        RuntimeQuestExport.LocationView::id,
+                        RuntimeQuestImportRequest.LocationView::id,
                         location -> world.getInitialNpcsInLocation(location.id()).stream().toList(),
                         (left, right) -> left,
                         java.util.LinkedHashMap::new
                 ));
         Map<String, List<String>> locationObjects = locations.stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        RuntimeQuestExport.LocationView::id,
+                        RuntimeQuestImportRequest.LocationView::id,
                         location -> world.getInitialObjectsInLocation(location.id()).stream().toList(),
                         (left, right) -> left,
                         java.util.LinkedHashMap::new
                 ));
 
-        List<RuntimeQuestExport.TransitionView> transitions = locations.stream()
+        List<RuntimeQuestImportRequest.TransitionView> transitions = locations.stream()
                 .flatMap(location -> world.getTransitionsFrom(location.id()).stream())
-                .map(transition -> new RuntimeQuestExport.TransitionView(
+                .map(transition -> new RuntimeQuestImportRequest.TransitionView(
                         transition.fromId(),
                         transition.toId(),
+                        null,
                         transition.condition() != null
                 ))
                 .toList();
 
-        List<RuntimeQuestExport.ActionView> actions = world.getActions().stream()
-                .map(action -> new RuntimeQuestExport.ActionView(
+        List<RuntimeQuestImportRequest.ActionView> actions = world.getActions().stream()
+                .map(action -> new RuntimeQuestImportRequest.ActionView(
                         action.id(),
                         action.locationId(),
                         action.description(),
                         action.targetId(),
-                        action.requiredItems().stream().toList(),
-                        action.progressFlagsToSet().stream().toList(),
+                        action.requiredItems(),
+                        action.progressFlagsToSet(),
+                        null,
+                        List.of(),
                         action.condition() != null,
                         action.effect() != null
                 ))
                 .toList();
 
-        List<RuntimeQuestExport.EndingView> endings = world.getEndings().stream()
-                .map(ending -> new RuntimeQuestExport.EndingView(ending.id(), ending.condition() != null))
+        List<RuntimeQuestImportRequest.EndingView> endings = world.getEndings().stream()
+                .map(ending -> new RuntimeQuestImportRequest.EndingView(ending.id(), null, ending.condition() != null))
                 .toList();
 
-        return new RuntimeQuestExport(
+        return new RuntimeQuestImportRequest(
                 definition.id(),
                 definition.name(),
                 definition.description(),

@@ -3,7 +3,6 @@ package com.myproject.questservice.adapter.in.rest.textruntime;
 import com.myproject.questservice.textruntime.application.port.in.TextRuntimeUseCase;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeActionResult;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeGenerationStatus;
-import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestExport;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestImportRequest;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeQuestSummary;
 import com.myproject.questservice.textruntime.application.port.in.dto.RuntimeSnapshot;
@@ -45,8 +44,8 @@ public class TextRuntimeController {
     }
 
     @GetMapping("/quests/{questId}/export")
-    public ResponseEntity<RuntimeQuestExport> exportQuest(@PathVariable String questId) {
-        RuntimeQuestExport payload = runtimeUseCase.exportRuntimeQuest(questId);
+    public ResponseEntity<RuntimeQuestImportRequest> exportQuest(@PathVariable String questId) {
+        RuntimeQuestImportRequest payload = runtimeUseCase.exportRuntimeQuest(questId);
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename((payload.id() == null || payload.id().isBlank() ? "runtime-quest" : payload.id()) + ".json")
                 .build();
