@@ -346,6 +346,12 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 buildSceneUserPrompt(snapshot)
         );
         String generatedScene = response.path("scene").asText("").trim();
+        if (generatedScene.isBlank()) {
+            generatedScene = response.path("description").asText("").trim();
+        }
+        if (generatedScene.isBlank()) {
+            generatedScene = response.path("text").asText("").trim();
+        }
         state.generatedSceneText = generatedScene.isBlank() ? snapshot.description() : generatedScene;
         state.sceneGenerated = true;
         return toStatus(sessionId, sceneId, state);
@@ -404,6 +410,17 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
 
     private RuntimeSnapshot snapshot(UUID sessionId, GameEngine engine) {
         GameEngine.InspectResult inspect = engine.inspect();
+        String sceneId = inspect.location().getId();
+        GeneratedSceneState generatedState = generatedBySession
+                .getOrDefault(sessionId, Map.of())
+                .get(sceneId);
+        String resolvedDescription = inspect.location().getDescription();
+        if (generatedState != null
+                && generatedState.sceneGenerated
+                && generatedState.generatedSceneText != null
+                && !generatedState.generatedSceneText.isBlank()) {
+            resolvedDescription = generatedState.generatedSceneText;
+        }
         List<RuntimeSnapshot.ItemView> items = inspect.visibleItems().stream()
                 .map(i -> new RuntimeSnapshot.ItemView(i.getId(), i.getName()))
                 .toList();
@@ -485,8 +502,8 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .toList();
         return new RuntimeSnapshot(
                 sessionId,
-                inspect.location().getId(),
-                inspect.location().getDescription(),
+                sceneId,
+                resolvedDescription,
                 items,
                 exits,
                 availableActions,
@@ -529,6 +546,13 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         sb.append("Objects: ").append(snapshot.objects().stream().map(RuntimeSnapshot.ObjectView::id).toList()).append('\n');
         sb.append("Переходы: ").append(snapshot.exits().stream().map(RuntimeSnapshot.ExitView::targetLocationId).toList()).append('\n');
         sb.append("Сделай короткое, атмосферное, но игровое описание этой сцены.");
+        sb.setLength(0);
+        sb.append("Location id: ").append(snapshot.currentLocationId()).append('\n');
+        sb.append("Base location description: ").append(snapshot.description()).append('\n');
+        sb.append("Visible NPC ids: ").append(snapshot.npcs().stream().map(RuntimeSnapshot.NpcView::id).toList()).append('\n');
+        sb.append("Visible object ids: ").append(snapshot.objects().stream().map(RuntimeSnapshot.ObjectView::id).toList()).append('\n');
+        sb.append("Write only a short neutral environmental description of this scene: location, objects, NPCs. ");
+        sb.append("Do not include goals, tasks, walkthrough hints, or solutions.");
         return sb.toString();
     }
 
