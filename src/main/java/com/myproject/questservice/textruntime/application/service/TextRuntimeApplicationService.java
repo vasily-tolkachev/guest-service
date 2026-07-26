@@ -16,6 +16,7 @@ import com.myproject.questservice.textruntime.domain.model.GameState;
 import com.myproject.questservice.textruntime.domain.model.Player;
 import com.myproject.questservice.textruntime.domain.model.RuntimeQuestDefinition;
 import com.myproject.questservice.textruntime.domain.model.World;
+import com.myproject.questservice.textruntime.domain.model.WorldObject;
 import com.myproject.questservice.textruntime.domain.service.GameEngine;
 import org.springframework.stereotype.Service;
 
@@ -65,6 +66,9 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         for (RuntimeQuestImportRequest.NpcView npc : request.npcs()) {
             world.addNpc(new com.myproject.questservice.textruntime.domain.model.Npc(npc.id(), npc.description(), npc.dialogue()));
         }
+        for (RuntimeQuestImportRequest.ObjectView worldObject : request.worldObjects() == null ? List.<RuntimeQuestImportRequest.ObjectView>of() : request.worldObjects()) {
+            world.addWorldObject(new WorldObject(worldObject.id(), worldObject.description()));
+        }
 
         for (Map.Entry<String, List<String>> entry : request.locationItems().entrySet()) {
             String locationId = entry.getKey();
@@ -76,6 +80,12 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
             String locationId = entry.getKey();
             for (String npcId : entry.getValue() == null ? List.<String>of() : entry.getValue()) {
                 world.placeNpc(locationId, npcId);
+            }
+        }
+        for (Map.Entry<String, List<String>> entry : (request.locationObjects() == null ? Map.<String, List<String>>of() : request.locationObjects()).entrySet()) {
+            String locationId = entry.getKey();
+            for (String objectId : entry.getValue() == null ? List.<String>of() : entry.getValue()) {
+                world.placeWorldObject(locationId, objectId);
             }
         }
 
@@ -140,6 +150,13 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .filter(npc -> npc != null)
                 .map(npc -> new RuntimeQuestExport.NpcView(npc.getId(), npc.getDescription(), npc.getDialogue()))
                 .toList();
+        List<RuntimeQuestExport.ObjectView> worldObjects = locations.stream()
+                .flatMap(location -> world.getInitialObjectsInLocation(location.id()).stream())
+                .distinct()
+                .map(world::getWorldObject)
+                .filter(worldObject -> worldObject != null)
+                .map(worldObject -> new RuntimeQuestExport.ObjectView(worldObject.getId(), worldObject.getDescription()))
+                .toList();
 
         Map<String, List<String>> locationItems = locations.stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -153,6 +170,13 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .collect(java.util.stream.Collectors.toMap(
                         RuntimeQuestExport.LocationView::id,
                         location -> world.getInitialNpcsInLocation(location.id()).stream().toList(),
+                        (left, right) -> left,
+                        java.util.LinkedHashMap::new
+                ));
+        Map<String, List<String>> locationObjects = locations.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        RuntimeQuestExport.LocationView::id,
+                        location -> world.getInitialObjectsInLocation(location.id()).stream().toList(),
                         (left, right) -> left,
                         java.util.LinkedHashMap::new
                 ));
@@ -191,8 +215,10 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 locations,
                 items,
                 npcs,
+                worldObjects,
                 locationItems,
                 locationNpcs,
+                locationObjects,
                 transitions,
                 actions,
                 endings
@@ -411,6 +437,9 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         List<RuntimeSnapshot.NpcView> npcs = inspect.visibleNpcs().stream()
                 .map(n -> new RuntimeSnapshot.NpcView(n.getId(), n.getDescription(), n.getDialogue()))
                 .toList();
+        List<RuntimeSnapshot.ObjectView> objects = inspect.visibleObjects().stream()
+                .map(o -> new RuntimeSnapshot.ObjectView(o.getId(), o.getDescription()))
+                .toList();
         for (RuntimeSnapshot.NpcView npc : npcs) {
             if (npc.id() == null || npc.id().isBlank()) {
                 continue;
@@ -437,6 +466,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 availableActions,
                 inventory,
                 npcs,
+                objects,
                 List.copyOf(engine.getState().getKnownFacts())
         );
     }
@@ -471,6 +501,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
         sb.append("Описание: ").append(snapshot.description()).append('\n');
         sb.append("Инвентарь: ").append(snapshot.inventory().stream().map(RuntimeSnapshot.ItemView::name).toList()).append('\n');
         sb.append("NPC: ").append(snapshot.npcs().stream().map(RuntimeSnapshot.NpcView::id).toList()).append('\n');
+        sb.append("Objects: ").append(snapshot.objects().stream().map(RuntimeSnapshot.ObjectView::id).toList()).append('\n');
         sb.append("Переходы: ").append(snapshot.exits().stream().map(RuntimeSnapshot.ExitView::targetLocationId).toList()).append('\n');
         sb.append("Сделай короткое, атмосферное, но игровое описание этой сцены.");
         return sb.toString();

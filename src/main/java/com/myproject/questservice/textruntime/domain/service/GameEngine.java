@@ -5,6 +5,7 @@ import com.myproject.questservice.textruntime.domain.model.Item;
 import com.myproject.questservice.textruntime.domain.model.Location;
 import com.myproject.questservice.textruntime.domain.model.Npc;
 import com.myproject.questservice.textruntime.domain.model.World;
+import com.myproject.questservice.textruntime.domain.model.WorldObject;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -134,6 +135,12 @@ public class GameEngine {
             return npc == null ? "NPC not found: " + targetId : npc.getDescription();
         }
 
+        String objectKey = findVisibleObject(targetId);
+        if (objectKey != null) {
+            WorldObject worldObject = world.getWorldObject(objectKey);
+            return worldObject == null ? "Object not found: " + targetId : worldObject.getDescription();
+        }
+
         return "Nothing to inspect: " + targetId;
     }
 
@@ -207,6 +214,10 @@ public class GameEngine {
                 .map(world::getNpc)
                 .filter(npc -> npc != null)
                 .toList();
+        List<WorldObject> visibleObjects = getVisibleObjectsInCurrentLocation().stream()
+                .map(world::getWorldObject)
+                .filter(worldObject -> worldObject != null)
+                .toList();
 
         List<ExitView> exits = getAvailableExitIds().stream()
                 .map(exit -> new ExitView(exit, exit))
@@ -217,7 +228,7 @@ public class GameEngine {
                 .filter(item -> item != null)
                 .toList();
 
-        return new InspectResult(location, visibleItems, exits, inventory, visibleNpcs);
+        return new InspectResult(location, visibleItems, exits, inventory, visibleNpcs, visibleObjects);
     }
 
     public List<World.WorldAction> getAvailableActions() {
@@ -253,6 +264,10 @@ public class GameEngine {
         return new ArrayList<>(world.getInitialNpcsInLocation(state.getCurrentLocation()));
     }
 
+    public List<String> getVisibleObjectsInCurrentLocation() {
+        return new ArrayList<>(world.getInitialObjectsInLocation(state.getCurrentLocation()));
+    }
+
     private String findVisibleItem(String itemId) {
         for (String currentItemId : getVisibleItemsInCurrentLocation()) {
             if (currentItemId.equalsIgnoreCase(itemId)) {
@@ -266,6 +281,15 @@ public class GameEngine {
         for (String currentNpcId : getVisibleNpcsInCurrentLocation()) {
             if (currentNpcId.equalsIgnoreCase(npcId)) {
                 return currentNpcId;
+            }
+        }
+        return null;
+    }
+
+    private String findVisibleObject(String objectId) {
+        for (String currentObjectId : getVisibleObjectsInCurrentLocation()) {
+            if (currentObjectId.equalsIgnoreCase(objectId)) {
+                return currentObjectId;
             }
         }
         return null;
@@ -295,7 +319,8 @@ public class GameEngine {
             List<Item> visibleItems,
             List<ExitView> exits,
             List<Item> inventory,
-            List<Npc> visibleNpcs
+            List<Npc> visibleNpcs,
+            List<WorldObject> visibleObjects
     ) {
     }
 

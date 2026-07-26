@@ -12,6 +12,7 @@ public record RuntimeSnapshot(
         List<ActionView> availableActions,
         List<ItemView> inventory,
         List<NpcView> npcs,
+        List<ObjectView> objects,
         List<String> knownFacts
 ) {
     public record ItemView(String id, String name) {
@@ -24,5 +25,8 @@ public record RuntimeSnapshot(
     }
 
     public record NpcView(String id, String description, String dialogue) {
+    }
+
+    public record ObjectView(String id, String description) {
     }
 }

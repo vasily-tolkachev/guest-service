@@ -13,8 +13,10 @@ public class World {
     private final Map<String, Location> locations = new LinkedHashMap<>();
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final Map<String, Npc> npcs = new LinkedHashMap<>();
+    private final Map<String, WorldObject> worldObjects = new LinkedHashMap<>();
     private final Map<String, Set<String>> locationItems = new LinkedHashMap<>();
     private final Map<String, Set<String>> locationNpcs = new LinkedHashMap<>();
+    private final Map<String, Set<String>> locationObjects = new LinkedHashMap<>();
     private final List<Transition> transitions = new ArrayList<>();
     private final List<WorldAction> actions = new ArrayList<>();
     private final List<Ending> endings = new ArrayList<>();
@@ -23,6 +25,7 @@ public class World {
         locations.put(location.getId(), location);
         locationItems.putIfAbsent(location.getId(), new LinkedHashSet<>());
         locationNpcs.putIfAbsent(location.getId(), new LinkedHashSet<>());
+        locationObjects.putIfAbsent(location.getId(), new LinkedHashSet<>());
     }
 
     public void addItem(Item item) {
@@ -39,6 +42,14 @@ public class World {
 
     public void placeNpc(String locationId, String npcId) {
         locationNpcs.computeIfAbsent(locationId, ignored -> new LinkedHashSet<>()).add(npcId);
+    }
+
+    public void addWorldObject(WorldObject worldObject) {
+        worldObjects.put(worldObject.getId(), worldObject);
+    }
+
+    public void placeWorldObject(String locationId, String objectId) {
+        locationObjects.computeIfAbsent(locationId, ignored -> new LinkedHashSet<>()).add(objectId);
     }
 
     public void addTransition(String fromId, String toId, Condition condition) {
@@ -69,6 +80,10 @@ public class World {
         return npcs.get(id);
     }
 
+    public WorldObject getWorldObject(String id) {
+        return worldObjects.get(id);
+    }
+
     public Collection<Location> getLocations() {
         return Collections.unmodifiableCollection(locations.values());
     }
@@ -79,6 +94,10 @@ public class World {
 
     public Set<String> getInitialNpcsInLocation(String locationId) {
         return locationNpcs.getOrDefault(locationId, Collections.emptySet());
+    }
+
+    public Set<String> getInitialObjectsInLocation(String locationId) {
+        return locationObjects.getOrDefault(locationId, Collections.emptySet());
     }
 
     public List<Transition> getTransitionsFrom(String locationId) {

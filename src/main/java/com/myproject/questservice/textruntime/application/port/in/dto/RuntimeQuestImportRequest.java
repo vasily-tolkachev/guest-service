@@ -16,8 +16,10 @@ public record RuntimeQuestImportRequest(
         @NotNull @Valid List<LocationView> locations,
         @NotNull @Valid List<ItemView> items,
         @NotNull @Valid List<NpcView> npcs,
+        @Valid List<ObjectView> worldObjects,
         @NotNull Map<String, List<String>> locationItems,
         @NotNull Map<String, List<String>> locationNpcs,
+        Map<String, List<String>> locationObjects,
         @NotNull @Valid List<TransitionView> transitions,
         @NotNull @Valid List<ActionView> actions,
         @NotNull @Valid List<EndingView> endings
@@ -27,6 +29,8 @@ public record RuntimeQuestImportRequest(
     public record ItemView(@NotBlank String id, @NotBlank String description) {}
 
     public record NpcView(@NotBlank String id, @NotBlank String description, @NotBlank String dialogue) {}
+
+    public record ObjectView(@NotBlank String id, @NotBlank String description) {}
 
     public record TransitionView(
             @NotBlank String fromId,

@@ -11,8 +11,10 @@ public record RuntimeQuestExport(
         List<LocationView> locations,
         List<ItemView> items,
         List<NpcView> npcs,
+        List<ObjectView> worldObjects,
         Map<String, List<String>> locationItems,
         Map<String, List<String>> locationNpcs,
+        Map<String, List<String>> locationObjects,
         List<TransitionView> transitions,
         List<ActionView> actions,
         List<EndingView> endings
@@ -22,6 +24,8 @@ public record RuntimeQuestExport(
     public record ItemView(String id, String description) {}
 
     public record NpcView(String id, String description, String dialogue) {}
+
+    public record ObjectView(String id, String description) {}
 
     public record TransitionView(String fromId, String toId, boolean hasCondition) {}
 
@@ -38,4 +42,3 @@ public record RuntimeQuestExport(
 
     public record EndingView(String id, boolean hasCondition) {}
 }
-
