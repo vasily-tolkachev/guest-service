@@ -91,7 +91,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     }
 
     @Override
-    public QuestProjectView generateStage(UUID projectId, StageType stageType) {
+    public QuestProjectView generateStage(UUID projectId, StageType stageType, String systemPromptOverride, String userPromptOverride) {
         if (stageType == StageType.KNOWLEDGE_CHAIN) {
             throw new ConflictException("KNOWLEDGE_CHAIN supports only per-way generation: /stages/KNOWLEDGE_CHAIN/ways/{wayId}/generate");
         }
@@ -117,7 +117,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         stage.setStatus(StageStatus.GENERATING);
         JsonNode output;
         try {
-            output = runner.generate(projectId);
+            output = generateStageOutput(projectId, stageType, runner, systemPromptOverride, userPromptOverride);
         } catch (RuntimeException ex) {
             stage.setStatus(previousStatus);
             projectRepository.save(project);
@@ -133,6 +133,31 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
 
         projectRepository.save(project);
         return toView(project);
+    }
+
+    private JsonNode generateStageOutput(
+            UUID projectId,
+            StageType stageType,
+            StageRunner runner,
+            String systemPromptOverride,
+            String userPromptOverride
+    ) {
+        boolean hasOverride = (systemPromptOverride != null && !systemPromptOverride.trim().isBlank())
+                || (userPromptOverride != null && !userPromptOverride.trim().isBlank());
+        if (!hasOverride) {
+            return runner.generate(projectId);
+        }
+        // Deterministic validator should stay deterministic.
+        if (stageType == StageType.LOGIC_VALIDATION) {
+            return runner.generate(projectId);
+        }
+        if (!(runner instanceof PromptPreviewStageRunner previewRunner)) {
+            throw new ConflictException("Stage does not support prompt overrides: " + stageType);
+        }
+        StagePromptPreview preview = previewRunner.previewPrompt(projectId);
+        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
+        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
+        return aiClient.generate(systemPrompt, userPrompt);
     }
 
     @Override

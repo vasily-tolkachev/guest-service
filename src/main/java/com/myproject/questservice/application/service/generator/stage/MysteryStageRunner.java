@@ -45,8 +45,6 @@ public class MysteryStageRunner implements StageRunner, PromptPreviewStageRunner
             
             Return ONLY valid JSON.
             
-            Generate 5 different quests.
-            
             Each quest must belong to a different genre.
             
             Examples of genres:

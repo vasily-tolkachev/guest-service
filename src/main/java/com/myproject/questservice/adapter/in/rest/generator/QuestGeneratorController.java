@@ -3,6 +3,7 @@ package com.myproject.questservice.adapter.in.rest.generator;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ConvertDslRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.CreateProjectRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.ImportProjectJsonRequest;
+import com.myproject.questservice.adapter.in.rest.dto.generator.PromptOverrideRequest;
 import com.myproject.questservice.adapter.in.rest.dto.generator.QuestProjectView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.myproject.questservice.application.port.in.generator.QuestGeneratorUseCase;
@@ -46,8 +47,17 @@ public class QuestGeneratorController {
     }
 
     @PostMapping("/{id}/stages/{type}/generate")
-    public QuestProjectView generateStage(@PathVariable UUID id, @PathVariable StageType type) {
-        return questGeneratorUseCase.generateStage(id, type);
+    public QuestProjectView generateStage(
+            @PathVariable UUID id,
+            @PathVariable StageType type,
+            @RequestBody(required = false) PromptOverrideRequest request
+    ) {
+        return questGeneratorUseCase.generateStage(
+                id,
+                type,
+                request == null ? null : request.systemPrompt(),
+                request == null ? null : request.userPrompt()
+        );
     }
 
     @PostMapping("/{id}/stages/{type}/preview")
