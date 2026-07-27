@@ -2386,6 +2386,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             case CHAPTERS -> "Chapters";
             case SCENES -> "Scenes";
             case QUEST_GRAPH -> "Quest Graph";
+            case LOGIC_VALIDATION -> "Logic Validation";
         };
     }
 }
