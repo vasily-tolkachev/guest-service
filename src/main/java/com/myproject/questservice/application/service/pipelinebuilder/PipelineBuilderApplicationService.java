@@ -484,7 +484,7 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
                 stage.isApproved(),
                 stage.getCurrentRevision() == null ? null : new PipelineStageRevisionView(
                         stage.getCurrentRevision().revisionNumber(),
-                        stage.getCurrentRevision().outputJson(),
+                        toPlainJson(stage.getCurrentRevision().outputJson()),
                         stage.getCurrentRevision().createdAt(),
                         stage.getCurrentRevision().systemPromptUsed(),
                         stage.getCurrentRevision().userPromptUsed()
