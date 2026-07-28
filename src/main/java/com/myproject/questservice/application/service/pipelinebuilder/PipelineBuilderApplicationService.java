@@ -167,7 +167,9 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
         if (!memory.isBlank()) {
             userPrompt = userPrompt + "\n\nMEMORY_CONTEXT_JSON:\n" + memory;
         }
-        return new StagePromptPreviewView(systemPrompt, userPrompt, args, memory);
+        String safeSystemPrompt = ensureJsonMention(systemPrompt);
+        String safeUserPrompt = ensureJsonMention(userPrompt);
+        return new StagePromptPreviewView(safeSystemPrompt, safeUserPrompt, toPlainJson(args), memory);
     }
 
     @Override
@@ -416,6 +418,21 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
         return normalized.isBlank() ? defaultValue : normalized;
     }
 
+    private String ensureJsonMention(String prompt) {
+        String value = nonBlankOrDefault(prompt, "");
+        if (value.toLowerCase(Locale.ROOT).contains("json")) {
+            return value;
+        }
+        return value + "\n\nReturn strictly valid JSON object.";
+    }
+
+    private Object toPlainJson(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return Map.of();
+        }
+        return objectMapper.convertValue(node, Object.class);
+    }
+
     private Instant parseInstant(String raw) {
         if (raw == null || raw.isBlank()) {
             return Instant.now();
@@ -457,7 +474,7 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
                 stage.isEnabled(),
                 stage.getSystemPromptTemplate(),
                 stage.getUserPromptTemplate(),
-                stage.getArgs(),
+                toPlainJson(stage.getArgs()),
                 stage.getMemoryMode().name(),
                 List.copyOf(stage.getMemorySources()),
                 stage.getDependencies().stream()
