@@ -214,7 +214,7 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
     @Override
     public Object exportProject(UUID projectId) {
         PipelineProject project = getProjectOrThrow(projectId);
-        return toSnapshot(project);
+        return toPlainJson((JsonNode) toSnapshot(project));
     }
 
     @Override
@@ -433,6 +433,13 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
         return objectMapper.convertValue(node, Object.class);
     }
 
+    private JsonNode toPlainJsonNode(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return objectMapper.createObjectNode();
+        }
+        return objectMapper.valueToTree(toPlainJson(node));
+    }
+
     private Instant parseInstant(String raw) {
         if (raw == null || raw.isBlank()) {
             return Instant.now();
@@ -505,7 +512,7 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
             stageNode.put("enabled", stage.isEnabled());
             stageNode.put("systemPromptTemplate", stage.getSystemPromptTemplate());
             stageNode.put("userPromptTemplate", stage.getUserPromptTemplate());
-            stageNode.set("args", stage.getArgs() == null ? objectMapper.createObjectNode() : stage.getArgs());
+            stageNode.set("args", toPlainJsonNode(stage.getArgs()));
             stageNode.put("memoryMode", stage.getMemoryMode().name());
             ArrayNode memorySources = objectMapper.createArrayNode();
             for (String source : stage.getMemorySources()) {
@@ -526,7 +533,7 @@ public class PipelineBuilderApplicationService implements PipelineBuilderUseCase
             for (PipelineStageRevision revision : stage.getRevisions()) {
                 ObjectNode rev = objectMapper.createObjectNode();
                 rev.put("revisionNumber", revision.revisionNumber());
-                rev.set("outputJson", revision.outputJson());
+                rev.set("outputJson", toPlainJsonNode(revision.outputJson()));
                 rev.put("createdAt", revision.createdAt().toString());
                 rev.put("systemPromptUsed", revision.systemPromptUsed());
                 rev.put("userPromptUsed", revision.userPromptUsed());
