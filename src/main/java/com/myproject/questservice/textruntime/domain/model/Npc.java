@@ -4,11 +4,13 @@ public class Npc {
     private final String id;
     private final String description;
     private final String dialogue;
+    private final String dialogueId;
 
-    public Npc(String id, String description, String dialogue) {
+    public Npc(String id, String description, String dialogue, String dialogueId) {
         this.id = id;
         this.description = description;
         this.dialogue = dialogue;
+        this.dialogueId = dialogueId;
     }
 
     public String getId() {
@@ -21,5 +23,9 @@ public class Npc {
 
     public String getDialogue() {
         return dialogue;
+    }
+
+    public String getDialogueId() {
+        return dialogueId;
     }
 }

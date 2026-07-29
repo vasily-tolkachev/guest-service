@@ -16,6 +16,7 @@ public record RuntimeQuestImportRequest(
         @NotNull @Valid List<LocationView> locations,
         @NotNull @Valid List<ItemView> items,
         @NotNull @Valid List<NpcView> npcs,
+        @Valid List<DialogueView> dialogues,
         @Valid List<ObjectView> worldObjects,
         @NotNull Map<String, List<String>> locationItems,
         @NotNull Map<String, List<String>> locationNpcs,
@@ -29,7 +30,26 @@ public record RuntimeQuestImportRequest(
 
     public record ItemView(@NotBlank String id, @NotBlank String description) {}
 
-    public record NpcView(@NotBlank String id, @NotBlank String description, @NotBlank String dialogue) {}
+    public record NpcView(@NotBlank String id, @NotBlank String description, String dialogue, String dialogueId) {}
+
+    public record DialogueView(
+            @NotBlank String id,
+            @NotBlank String startNodeId,
+            @NotNull @Valid List<DialogueNodeView> nodes
+    ) {}
+
+    public record DialogueNodeView(
+            @NotBlank String id,
+            @NotBlank String text,
+            @Valid List<DialogueOptionView> options,
+            @Valid List<EffectSpec> effects
+    ) {}
+
+    public record DialogueOptionView(
+            @NotBlank String text,
+            String nextNodeId,
+            @Valid ConditionSpec condition
+    ) {}
 
     public record ObjectView(@NotBlank String id, @NotBlank String description) {}
 

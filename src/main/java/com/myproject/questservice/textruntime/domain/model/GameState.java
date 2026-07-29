@@ -15,6 +15,7 @@ public class GameState {
     private final Set<String> performedActions = new LinkedHashSet<>();
     private final Map<String, String> objectStates = new LinkedHashMap<>();
     private final Map<String, String> characterStates = new LinkedHashMap<>();
+    private final Map<String, String> dialogueNodeByNpc = new LinkedHashMap<>();
     private final Set<String> removedWorldItems = new HashSet<>();
 
     public GameState(String currentLocation, Player player) {
@@ -56,6 +57,10 @@ public class GameState {
 
     public Map<String, String> getCharacterStates() {
         return characterStates;
+    }
+
+    public Map<String, String> getDialogueNodeByNpc() {
+        return dialogueNodeByNpc;
     }
 
     public Set<String> getRemovedWorldItems() {

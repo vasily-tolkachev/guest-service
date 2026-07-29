@@ -4,6 +4,7 @@ import com.myproject.questservice.textruntime.domain.model.GameState;
 import com.myproject.questservice.textruntime.domain.model.Item;
 import com.myproject.questservice.textruntime.domain.model.Location;
 import com.myproject.questservice.textruntime.domain.model.Npc;
+import com.myproject.questservice.textruntime.domain.model.Dialogue;
 import com.myproject.questservice.textruntime.domain.model.World;
 import com.myproject.questservice.textruntime.domain.model.WorldObject;
 
@@ -76,6 +77,17 @@ public class GameEngine {
     }
 
     public String executeAction(String actionId) {
+        if (actionId != null && actionId.startsWith("dialogue:")) {
+            String[] tokens = actionId.split(":", 3);
+            if (tokens.length == 3) {
+                try {
+                    int optionIndex = Integer.parseInt(tokens[2]);
+                    return chooseDialogueOption(tokens[1], optionIndex);
+                } catch (NumberFormatException ignored) {
+                    return "Unknown action: " + actionId;
+                }
+            }
+        }
         for (World.WorldAction action : world.getActions()) {
             if (action.id().equalsIgnoreCase(actionId)) {
                 if (action.locationId() != null && !action.locationId().equals(state.getCurrentLocation())) {
@@ -118,7 +130,120 @@ public class GameEngine {
         }
         state.getCharacterStates().put("last_talked", npc.getId());
         state.getPerformedActions().add("talk:" + npc.getId());
-        return npc.getDialogue();
+        String dialogueId = npc.getDialogueId();
+        if (dialogueId == null || dialogueId.isBlank()) {
+            return npc.getDialogue() == null ? "" : npc.getDialogue();
+        }
+
+        Dialogue dialogue = world.getDialogue(dialogueId);
+        if (dialogue == null) {
+            return npc.getDialogue() == null ? "" : npc.getDialogue();
+        }
+
+        Dialogue.Node node = resolveCurrentDialogueNode(npc, dialogue);
+        if (node == null) {
+            return npc.getDialogue() == null ? "" : npc.getDialogue();
+        }
+        return node.text();
+    }
+
+    public List<DialogueOptionView> getDialogueOptions(String npcId) {
+        String npcKey = findVisibleNpc(npcId);
+        if (npcKey == null) {
+            return List.of();
+        }
+        Npc npc = world.getNpc(npcKey);
+        if (npc == null || npc.getDialogueId() == null || npc.getDialogueId().isBlank()) {
+            return List.of();
+        }
+        Dialogue dialogue = world.getDialogue(npc.getDialogueId());
+        if (dialogue == null) {
+            return List.of();
+        }
+        Dialogue.Node node = resolveCurrentDialogueNode(npc, dialogue);
+        if (node == null || node.options() == null || node.options().isEmpty()) {
+            return List.of();
+        }
+        List<DialogueOptionView> options = new ArrayList<>();
+        for (int i = 0; i < node.options().size(); i++) {
+            Dialogue.Option option = node.options().get(i);
+            if (option == null || option.text() == null || option.text().isBlank()) {
+                continue;
+            }
+            if (option.condition() != null && !option.condition().test(state, world)) {
+                continue;
+            }
+            options.add(new DialogueOptionView("dialogue:" + npc.getId() + ":" + i, option.text(), npc.getId()));
+        }
+        return options;
+    }
+
+    private String chooseDialogueOption(String npcId, int optionIndex) {
+        String npcKey = findVisibleNpc(npcId);
+        if (npcKey == null) {
+            return "No interaction available for: " + npcId;
+        }
+        Npc npc = world.getNpc(npcKey);
+        if (npc == null || npc.getDialogueId() == null || npc.getDialogueId().isBlank()) {
+            return "No interaction available for: " + npcId;
+        }
+        Dialogue dialogue = world.getDialogue(npc.getDialogueId());
+        if (dialogue == null) {
+            return "No interaction available for: " + npcId;
+        }
+        Dialogue.Node currentNode = resolveCurrentDialogueNode(npc, dialogue);
+        if (currentNode == null || currentNode.options() == null || optionIndex < 0 || optionIndex >= currentNode.options().size()) {
+            return "No interaction available for: " + npcId;
+        }
+        Dialogue.Option option = currentNode.options().get(optionIndex);
+        if (option.condition() != null && !option.condition().test(state, world)) {
+            return "Action conditions are not met";
+        }
+
+        String nextNodeId = option.nextNodeId();
+        if (nextNodeId == null || nextNodeId.isBlank()) {
+            state.getDialogueNodeByNpc().remove(npc.getId());
+            state.getPerformedActions().add("dialogue_end:" + npc.getId());
+            return "Диалог завершен.";
+        }
+        Dialogue.Node nextNode = findDialogueNode(dialogue, nextNodeId);
+        if (nextNode == null) {
+            state.getDialogueNodeByNpc().remove(npc.getId());
+            state.getPerformedActions().add("dialogue_end:" + npc.getId());
+            return "Диалог завершен.";
+        }
+
+        state.getDialogueNodeByNpc().put(npc.getId(), nextNode.id());
+        if (nextNode.effect() != null) {
+            nextNode.effect().apply(state, world);
+        }
+        state.getPerformedActions().add("dialogue:" + npc.getId() + ":" + optionIndex);
+        return nextNode.text();
+    }
+
+    private Dialogue.Node resolveCurrentDialogueNode(Npc npc, Dialogue dialogue) {
+        String currentNodeId = state.getDialogueNodeByNpc().get(npc.getId());
+        Dialogue.Node node = findDialogueNode(dialogue, currentNodeId);
+        if (node != null) {
+            return node;
+        }
+        Dialogue.Node startNode = findDialogueNode(dialogue, dialogue.startNodeId());
+        if (startNode != null) {
+            state.getDialogueNodeByNpc().put(npc.getId(), startNode.id());
+        }
+        return startNode;
+    }
+
+    private static Dialogue.Node findDialogueNode(Dialogue dialogue, String nodeId) {
+        if (dialogue == null || nodeId == null || nodeId.isBlank() || dialogue.nodes() == null) {
+            return null;
+        }
+        for (Dialogue.Node node : dialogue.nodes()) {
+            if (node != null && node.id() != null && node.id().equals(nodeId)) {
+                return node;
+            }
+        }
+        return null;
     }
 
     public String inspect(String targetId) {
@@ -159,6 +284,9 @@ public class GameEngine {
     public InteractionResult interactDetailed(String targetId) {
         if (targetId == null || targetId.isBlank()) {
             return new InteractionResult("Target is empty", "error:target_empty");
+        }
+        if (targetId.startsWith("dialogue:")) {
+            return new InteractionResult(executeAction(targetId), "dialogue:" + targetId);
         }
 
         // 1) NPC interaction has priority.
@@ -335,6 +463,13 @@ public class GameEngine {
     public record InteractionResult(
             String message,
             String engineAction
+    ) {
+    }
+
+    public record DialogueOptionView(
+            String actionId,
+            String text,
+            String npcId
     ) {
     }
 }

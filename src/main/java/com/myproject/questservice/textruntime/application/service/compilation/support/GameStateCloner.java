@@ -17,6 +17,7 @@ public final class GameStateCloner {
         copy.getPerformedActions().addAll(source.getPerformedActions());
         copy.getObjectStates().putAll(source.getObjectStates());
         copy.getCharacterStates().putAll(source.getCharacterStates());
+        copy.getDialogueNodeByNpc().putAll(source.getDialogueNodeByNpc());
         copy.getRemovedWorldItems().addAll(source.getRemovedWorldItems());
         return copy;
     }

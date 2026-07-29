@@ -13,6 +13,7 @@ import com.myproject.questservice.textruntime.application.port.out.RuntimeQuestC
 import com.myproject.questservice.textruntime.application.port.out.RuntimeSessionStorePort;
 import com.myproject.questservice.textruntime.domain.model.GameState;
 import com.myproject.questservice.textruntime.domain.model.Player;
+import com.myproject.questservice.textruntime.domain.model.Dialogue;
 import com.myproject.questservice.textruntime.domain.model.RuntimeQuestDefinition;
 import com.myproject.questservice.textruntime.domain.model.World;
 import com.myproject.questservice.textruntime.domain.model.WorldObject;
@@ -64,7 +65,20 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
             world.addItem(new com.myproject.questservice.textruntime.domain.model.Item(item.id(), item.description()));
         }
         for (RuntimeQuestImportRequest.NpcView npc : request.npcs()) {
-            world.addNpc(new com.myproject.questservice.textruntime.domain.model.Npc(npc.id(), npc.description(), npc.dialogue()));
+            world.addNpc(new com.myproject.questservice.textruntime.domain.model.Npc(npc.id(), npc.description(), npc.dialogue(), npc.dialogueId()));
+        }
+        for (RuntimeQuestImportRequest.DialogueView dialogue : request.dialogues() == null ? List.<RuntimeQuestImportRequest.DialogueView>of() : request.dialogues()) {
+            List<Dialogue.Node> nodes = (dialogue.nodes() == null ? List.<RuntimeQuestImportRequest.DialogueNodeView>of() : dialogue.nodes()).stream()
+                    .map(node -> new Dialogue.Node(
+                            node.id(),
+                            node.text(),
+                            (node.options() == null ? List.<RuntimeQuestImportRequest.DialogueOptionView>of() : node.options()).stream()
+                                    .map(option -> new Dialogue.Option(option.text(), option.nextNodeId(), toCondition(option.condition())))
+                                    .toList(),
+                            toEffect(node.effects())
+                    ))
+                    .toList();
+            world.addDialogue(new Dialogue(dialogue.id(), dialogue.startNodeId(), nodes));
         }
         for (RuntimeQuestImportRequest.ObjectView worldObject : request.worldObjects() == null ? List.<RuntimeQuestImportRequest.ObjectView>of() : request.worldObjects()) {
             world.addWorldObject(new WorldObject(worldObject.id(), worldObject.description()));
@@ -159,7 +173,28 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 .distinct()
                 .map(world::getNpc)
                 .filter(npc -> npc != null)
-                .map(npc -> new RuntimeQuestImportRequest.NpcView(npc.getId(), npc.getDescription(), npc.getDialogue()))
+                .map(npc -> new RuntimeQuestImportRequest.NpcView(npc.getId(), npc.getDescription(), npc.getDialogue(), npc.getDialogueId()))
+                .toList();
+        List<RuntimeQuestImportRequest.DialogueView> dialogues = npcs.stream()
+                .map(RuntimeQuestImportRequest.NpcView::dialogueId)
+                .filter(dialogueId -> dialogueId != null && !dialogueId.isBlank())
+                .distinct()
+                .map(world::getDialogue)
+                .filter(dialogue -> dialogue != null)
+                .map(dialogue -> new RuntimeQuestImportRequest.DialogueView(
+                        dialogue.id(),
+                        dialogue.startNodeId(),
+                        (dialogue.nodes() == null ? List.<Dialogue.Node>of() : dialogue.nodes()).stream()
+                                .map(node -> new RuntimeQuestImportRequest.DialogueNodeView(
+                                        node.id(),
+                                        node.text(),
+                                        (node.options() == null ? List.<Dialogue.Option>of() : node.options()).stream()
+                                                .map(option -> new RuntimeQuestImportRequest.DialogueOptionView(option.text(), option.nextNodeId(), null))
+                                                .toList(),
+                                        List.of()
+                                ))
+                                .toList()
+                ))
                 .toList();
         List<RuntimeQuestImportRequest.ObjectView> worldObjects = locations.stream()
                 .flatMap(location -> world.getInitialObjectsInLocation(location.id()).stream())
@@ -232,6 +267,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                 locations,
                 items,
                 npcs,
+                dialogues,
                 worldObjects,
                 locationItems,
                 locationNpcs,
@@ -474,7 +510,7 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
             }
         }
         List<RuntimeSnapshot.NpcView> npcs = inspect.visibleNpcs().stream()
-                .map(n -> new RuntimeSnapshot.NpcView(n.getId(), n.getDescription(), n.getDialogue()))
+                .map(n -> new RuntimeSnapshot.NpcView(n.getId(), n.getDescription(), n.getDialogue(), n.getDialogueId()))
                 .toList();
         List<RuntimeSnapshot.ObjectView> objects = inspect.visibleObjects().stream()
                 .map(o -> new RuntimeSnapshot.ObjectView(o.getId(), o.getDescription()))
@@ -491,6 +527,25 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
                         npc.id(),
                         List.of()
                 ));
+            }
+        }
+        for (RuntimeSnapshot.NpcView npc : npcs) {
+            if (npc.id() == null || npc.id().isBlank()) {
+                continue;
+            }
+            for (GameEngine.DialogueOptionView option : engine.getDialogueOptions(npc.id())) {
+                if (option == null || option.actionId() == null || option.actionId().isBlank()) {
+                    continue;
+                }
+                String optionKey = "dlg:" + option.actionId();
+                if (uniqueKeys.add(optionKey)) {
+                    availableActions.add(new RuntimeSnapshot.ActionView(
+                            option.actionId(),
+                            option.text(),
+                            option.actionId(),
+                            List.of()
+                    ));
+                }
             }
         }
         List<RuntimeSnapshot.ItemView> inventory = inspect.inventory().stream()

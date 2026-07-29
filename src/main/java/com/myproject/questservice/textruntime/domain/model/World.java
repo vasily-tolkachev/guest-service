@@ -13,6 +13,7 @@ public class World {
     private final Map<String, Location> locations = new LinkedHashMap<>();
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final Map<String, Npc> npcs = new LinkedHashMap<>();
+    private final Map<String, Dialogue> dialogues = new LinkedHashMap<>();
     private final Map<String, WorldObject> worldObjects = new LinkedHashMap<>();
     private final Map<String, Set<String>> locationItems = new LinkedHashMap<>();
     private final Map<String, Set<String>> locationNpcs = new LinkedHashMap<>();
@@ -48,6 +49,10 @@ public class World {
         worldObjects.put(worldObject.getId(), worldObject);
     }
 
+    public void addDialogue(Dialogue dialogue) {
+        dialogues.put(dialogue.id(), dialogue);
+    }
+
     public void placeWorldObject(String locationId, String objectId) {
         locationObjects.computeIfAbsent(locationId, ignored -> new LinkedHashSet<>()).add(objectId);
     }
@@ -78,6 +83,10 @@ public class World {
 
     public Npc getNpc(String id) {
         return npcs.get(id);
+    }
+
+    public Dialogue getDialogue(String id) {
+        return dialogues.get(id);
     }
 
     public WorldObject getWorldObject(String id) {

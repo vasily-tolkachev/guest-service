@@ -28,7 +28,7 @@ public record RuntimeSnapshot(
     public record ActionView(String id, String description, String targetId, List<String> requiredItems) {
     }
 
-    public record NpcView(String id, String description, String dialogue) {
+    public record NpcView(String id, String description, String dialogue, String dialogueId) {
     }
 
     public record ObjectView(String id, String description) {
