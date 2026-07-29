@@ -423,6 +423,9 @@ public class TextRuntimeApplicationService implements TextRuntimeUseCase {
             if (actionId.isBlank()) {
                 continue;
             }
+            if (actionId.startsWith("dialogue:")) {
+                continue;
+            }
             if (actionId.startsWith("move:") && targetId.isBlank()) {
                 continue;
             }

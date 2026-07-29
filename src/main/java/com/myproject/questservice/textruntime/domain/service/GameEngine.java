@@ -286,7 +286,7 @@ public class GameEngine {
             return new InteractionResult("Target is empty", "error:target_empty");
         }
         if (targetId.startsWith("dialogue:")) {
-            return new InteractionResult(executeAction(targetId), "dialogue:" + targetId);
+            return new InteractionResult(executeAction(targetId), targetId);
         }
 
         // 1) NPC interaction has priority.
