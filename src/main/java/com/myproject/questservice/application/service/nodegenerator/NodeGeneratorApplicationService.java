@@ -38,6 +38,22 @@ import java.util.concurrent.ConcurrentMap;
 public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     private static final int SCENE_IDEAS_LIMIT = 3;
     private static final long IDEAS_CACHE_TTL_MS = 10 * 60 * 1000;
+    private static final String STORY_BIBLE_SPIKE_VERSION = "SB_SPIKE_V1";
+    private static final String STORY_BIBLE_SPIKE_CONTEXT = """
+            Story Bible context (hardcoded spike):
+            - title: Тень старого маяка
+            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту, и теперь угроза переходит к игроку.
+            - protagonist_goal: Найти смотрителя маяка и выяснить, что произошло.
+            - true_stakes: Маяк скрывает контрабандный груз; смотритель инсценировал исчезновение, чтобы уйти от долгов.
+            - opposing_force: Местный рыбак, который выглядит союзником, но мешает раскрытию правды.
+            - key_facts:
+              1) Маяк не работал последние три ночи.
+              2) В судовом журнале есть вырванные страницы.
+              3) Рыбак появляется каждый раз, когда игрок находит новую улику.
+            - next_unrevealed_twist: Помогающий игроку рыбак на самом деле работает против него и заметает следы.
+            - tone: Мрачный прибрежный триллер с элементами тайны, без сверхъестественного.
+            Use this context to keep tension and push story progression.
+            """;
 
     private final ProjectRepository projectRepository;
     private final QuestGeneratorUseCase questGeneratorUseCase;
@@ -324,7 +340,7 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     @Override
     public FirstSceneIdeasResponse generateFirstSceneIdeas(String prompt) {
         String normalizedPrompt = prompt == null ? "" : prompt.trim();
-        String cacheKey = "FIRST::" + normalizedPrompt;
+        String cacheKey = "FIRST::" + STORY_BIBLE_SPIKE_VERSION + "::" + normalizedPrompt;
         FirstSceneIdeasResponse cached = getCachedIdeas(cacheKey);
         if (cached != null) {
             return cached;
@@ -348,6 +364,8 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         String userPrompt = normalizedPrompt.isBlank()
                 ? "Пользователь не дал тему. Предложи универсальные идеи для приключенческого квеста."
                 : "Тема и ситуация от пользователя:\n" + normalizedPrompt;
+
+        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_CONTEXT;
 
         FirstSceneIdeasResponse response = parseIdeas(
                 aiClient.generate(systemPrompt, userPrompt, draftModel()),
@@ -413,7 +431,10 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 trimToEmpty(action.getText()).isBlank() ? action.getId() : trimToEmpty(action.getText())
         );
 
-        String cacheKey = "NEXT::%s::%s::%s::%s::%s".formatted(
+        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_CONTEXT;
+
+        String cacheKey = "NEXT::%s::%s::%s::%s::%s::%s".formatted(
+                STORY_BIBLE_SPIKE_VERSION,
                 projectId,
                 trimToEmpty(sourceNode.getId()),
                 trimToEmpty(action.getId()),

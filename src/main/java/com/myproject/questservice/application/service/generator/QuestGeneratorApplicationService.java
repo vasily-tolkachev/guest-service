@@ -47,6 +47,21 @@ import java.util.UUID;
 
 @Service
 public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
+    private static final String STORY_BIBLE_SPIKE_CONTEXT = """
+            Story Bible context (hardcoded spike):
+            - title: Тень старого маяка
+            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту, и теперь угроза переходит к игроку.
+            - protagonist_goal: Найти смотрителя маяка и выяснить, что произошло.
+            - true_stakes: Маяк скрывает контрабандный груз; смотритель инсценировал исчезновение, чтобы уйти от долгов.
+            - opposing_force: Местный рыбак, который выглядит союзником, но мешает раскрытию правды.
+            - key_facts:
+              1) Маяк не работал последние три ночи.
+              2) В судовом журнале есть вырванные страницы.
+              3) Рыбак появляется каждый раз, когда игрок находит новую улику.
+            - next_unrevealed_twist: Помогающий игроку рыбак на самом деле работает против него и заметает следы.
+            - tone: Мрачный прибрежный триллер с элементами тайны, без сверхъестественного.
+            Use this context to keep tension and push story progression.
+            """;
 
     private final ProjectRepository projectRepository;
     private final StageRunnerRegistry stageRunnerRegistry;
@@ -1549,6 +1564,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 node.getActions().stream().map(WorkspaceAction::getText).toList(),
                 firstScene ? "yes" : "no"
         );
+        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_CONTEXT;
         return new StagePromptPreview(systemPrompt, userPrompt);
     }
 
