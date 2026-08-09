@@ -39,10 +39,16 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     private static final int SCENE_IDEAS_LIMIT = 3;
     private static final long IDEAS_CACHE_TTL_MS = 10 * 60 * 1000;
     private static final String STORY_BIBLE_SPIKE_VERSION = "SB_SPIKE_V1";
-    private static final String STORY_BIBLE_SPIKE_CONTEXT = """
-            Story Bible context (hardcoded spike):
+    private static final String STORY_BIBLE_SPIKE_TONE_CONTEXT = """
+            Story Bible guidance (first scene, minimal):
+            - tone: Мрачный прибрежный триллер с элементами тайны, без сверхъестественного.
+            - logline_hint: Смотритель маяка исчез; есть ощущение скрытой угрозы.
+            Keep only atmosphere and immediate situation. Do not inject plot facts checklist.
+            """;
+    private static final String STORY_BIBLE_SPIKE_SOFT_CONTEXT = """
+            Story Bible signals (soft guidance, not checklist):
             - title: Тень старого маяка
-            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту, и теперь угроза переходит к игроку.
+            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту.
             - protagonist_goal: Найти смотрителя маяка и выяснить, что произошло.
             - true_stakes: Маяк скрывает контрабандный груз; смотритель инсценировал исчезновение, чтобы уйти от долгов.
             - opposing_force: Местный рыбак, который выглядит союзником, но мешает раскрытию правды.
@@ -51,8 +57,11 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
               2) В судовом журнале есть вырванные страницы.
               3) Рыбак появляется каждый раз, когда игрок находит новую улику.
             - next_unrevealed_twist: Помогающий игроку рыбак на самом деле работает против него и заметает следы.
-            - tone: Мрачный прибрежный триллер с элементами тайны, без сверхъестественного.
-            Use this context to keep tension and push story progression.
+            Usage rules:
+            - Use at most ONE signal from this block in a single idea.
+            - If none fits naturally, use none.
+            - Do not dump multiple facts/twists in one scene.
+            - Do not introduce opposing_force unless scene logic naturally motivates it.
             """;
 
     private final ProjectRepository projectRepository;
@@ -365,7 +374,13 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 ? "Пользователь не дал тему. Предложи универсальные идеи для приключенческого квеста."
                 : "Тема и ситуация от пользователя:\n" + normalizedPrompt;
 
-        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_CONTEXT;
+        systemPrompt = systemPrompt + """
+                Additional rules:
+                - Keep first scene focused on one immediate situation.
+                - Avoid plot-dump and checklist-like insertion of facts.
+                - Do not reveal multiple major facts or twists at once.
+                """;
+        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_TONE_CONTEXT;
 
         FirstSceneIdeasResponse response = parseIdeas(
                 aiClient.generate(systemPrompt, userPrompt, draftModel()),
@@ -431,7 +446,14 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
                 trimToEmpty(action.getText()).isBlank() ? action.getId() : trimToEmpty(action.getText())
         );
 
-        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_CONTEXT;
+        systemPrompt = systemPrompt + """
+                Additional rules:
+                - Use at most one Story Bible signal per generated idea.
+                - If Story Bible signals do not fit the current situation, use none.
+                - Do not reveal multiple key facts or twists at once.
+                - Do not introduce opposing_force without explicit scene motivation.
+                """;
+        userPrompt = userPrompt + "\n\n" + STORY_BIBLE_SPIKE_SOFT_CONTEXT;
 
         String cacheKey = "NEXT::%s::%s::%s::%s::%s::%s".formatted(
                 STORY_BIBLE_SPIKE_VERSION,

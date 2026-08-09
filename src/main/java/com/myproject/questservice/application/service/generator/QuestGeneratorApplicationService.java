@@ -48,9 +48,9 @@ import java.util.UUID;
 @Service
 public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private static final String STORY_BIBLE_SPIKE_CONTEXT = """
-            Story Bible context (hardcoded spike):
+            Story Bible signals (soft guidance, not checklist):
             - title: Тень старого маяка
-            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту, и теперь угроза переходит к игроку.
+            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту.
             - protagonist_goal: Найти смотрителя маяка и выяснить, что произошло.
             - true_stakes: Маяк скрывает контрабандный груз; смотритель инсценировал исчезновение, чтобы уйти от долгов.
             - opposing_force: Местный рыбак, который выглядит союзником, но мешает раскрытию правды.
@@ -59,8 +59,11 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
               2) В судовом журнале есть вырванные страницы.
               3) Рыбак появляется каждый раз, когда игрок находит новую улику.
             - next_unrevealed_twist: Помогающий игроку рыбак на самом деле работает против него и заметает следы.
-            - tone: Мрачный прибрежный триллер с элементами тайны, без сверхъестественного.
-            Use this context to keep tension and push story progression.
+            Usage rules:
+            - Use at most ONE signal from this block.
+            - If none fits naturally, use none.
+            - Do not reveal multiple facts/twists in one step.
+            - Do not introduce opposing_force unless scene logic naturally motivates it.
             """;
 
     private final ProjectRepository projectRepository;
@@ -1504,6 +1507,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
                 - each item is one short factual statement
                 - no assumptions beyond given text
                 - no duplicates
+                """;
+        systemPrompt = systemPrompt + """
+                Additional rules:
+                - Use at most one Story Bible signal for a full actions list.
+                - If Story Bible is not locally relevant to this node, ignore it.
+                - Avoid spoiler-like action options that reveal several facts at once.
+                - Do not force opposing_force actions without scene-grounded cause.
                 """;
         String userPrompt = """
                 Node action_description:
