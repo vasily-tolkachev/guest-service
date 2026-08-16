@@ -1128,7 +1128,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
             String systemPrompt = """
                     You decide if new world knowledge unlocks new player actions for one quest node.
                     Return valid JSON only.
-                    All text values must be in Russian.
+                    All text values must be in English.
                     Output schema:
                     {
                       "has_new_actions": true,
@@ -1438,7 +1438,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         String systemPrompt = """
                 You are a text quest scene writer.
                 Return valid JSON only.
-                All text values must be in Russian.
+                All text values must be in English.
                 Output schema:
                 {
                   "action_description": "",
@@ -1498,7 +1498,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         String systemPrompt = """
                 You extract world knowledge facts from a quest scene description.
                 Return valid JSON only.
-                All text values must be in Russian.
+                All text values must be in English.
                 Output schema:
                 {
                   "knowledge": ["", ""]
@@ -1535,7 +1535,7 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         String systemPrompt = """
                 You generate player actions for one quest node.
                 Return valid JSON only.
-                All text values must be in Russian.
+                All text values must be in English.
                 Output schema:
                 {
                   "actions": [
@@ -1626,12 +1626,13 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
     private boolean isActionGroundedInKnownFacts(String actionText, String sceneText, String knowledgeText, boolean firstScene) {
         String text = actionText.toLowerCase(Locale.ROOT);
         if (firstScene) {
-            if (text.startsWith("осмотреть")
-                    || text.startsWith("проверить")
-                    || text.startsWith("поговорить")
-                    || text.startsWith("прислушаться")
-                    || text.startsWith("выглянуть")
-                    || text.startsWith("подойти")) {
+            if (text.startsWith("inspect")
+                    || text.startsWith("check")
+                    || text.startsWith("talk")
+                    || text.startsWith("ask")
+                    || text.startsWith("listen")
+                    || text.startsWith("look")
+                    || text.startsWith("approach")) {
                 return true;
             }
         }
@@ -2416,3 +2417,4 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         };
     }
 }
+

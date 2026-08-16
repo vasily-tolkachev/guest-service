@@ -41,29 +41,28 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     private static final String STORY_BIBLE_SPIKE_VERSION = "SB_SPIKE_V1";
     private static final String STORY_BIBLE_SPIKE_TONE_CONTEXT = """
             Story Bible guidance (first scene, minimal):
-            - tone: Мрачный прибрежный триллер с элементами тайны, без сверхъестественного.
-            - logline_hint: Смотритель маяка исчез; есть ощущение скрытой угрозы.
+            - tone: bleak coastal thriller with mystery elements, no supernatural.
+            - logline_hint: the lighthouse keeper disappeared; there is a hidden threat.
             Keep only atmosphere and immediate situation. Do not inject plot facts checklist.
             """;
     private static final String STORY_BIBLE_SPIKE_SOFT_CONTEXT = """
             Story Bible signals (soft guidance, not checklist):
-            - title: Тень старого маяка
-            - logline: Смотритель маяка пропал три ночи назад; его записи намекают на охоту.
-            - protagonist_goal: Найти смотрителя маяка и выяснить, что произошло.
-            - true_stakes: Маяк скрывает контрабандный груз; смотритель инсценировал исчезновение, чтобы уйти от долгов.
-            - opposing_force: Местный рыбак, который выглядит союзником, но мешает раскрытию правды.
+            - title: Shadow of the Old Lighthouse
+            - logline: the lighthouse keeper vanished three nights ago; his notes suggest a hunt.
+            - protagonist_goal: find the keeper and understand what happened.
+            - true_stakes: the lighthouse hides smuggled cargo; the keeper staged his disappearance to escape debt.
+            - opposing_force: a local fisherman looks helpful but obstructs the truth.
             - key_facts:
-              1) Маяк не работал последние три ночи.
-              2) В судовом журнале есть вырванные страницы.
-              3) Рыбак появляется каждый раз, когда игрок находит новую улику.
-            - next_unrevealed_twist: Помогающий игроку рыбак на самом деле работает против него и заметает следы.
+              1) the lighthouse has been dark for three nights.
+              2) pages are torn from the ship log.
+              3) the fisherman appears whenever the player finds a clue.
+            - next_unrevealed_twist: the helpful fisherman actually works against the player and erases traces.
             Usage rules:
             - Use at most ONE signal from this block in a single idea.
             - If none fits naturally, use none.
             - Do not dump multiple facts/twists in one scene.
             - Do not introduce opposing_force unless scene logic naturally motivates it.
             """;
-
     private final ProjectRepository projectRepository;
     private final QuestGeneratorUseCase questGeneratorUseCase;
     private final QuestImportService questImportService;
@@ -356,24 +355,23 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         }
 
         String systemPrompt = """
-                Ты сценарист интерактивных квестов.
-                Сгенерируй 3 разных идеи стартовой ситуации для первой сцены.
-                Верни ТОЛЬКО JSON формата:
+                You are a writer of interactive text quests.
+                Generate 3 different first-scene starting situation ideas.
+                Return JSON only in this format:
                 {
                   "ideas": [
-                    { "title": "Короткий заголовок", "scenarioText": "Описание стартовой ситуации (2-4 предложения)" }
+                    { "title": "Short title", "scenarioText": "First-scene situation description (2-4 sentences)" }
                   ]
                 }
-                Ограничения:
-                - Только русский язык.
-                - Без markdown.
-                - title: 2-8 слов.
-                - scenarioText: конкретная ситуация, без абстракций.
+                Constraints:
+                - English language only.
+                - No markdown.
+                - title: 2-8 words.
+                - scenarioText: concrete situation, no abstractions.
                 """;
         String userPrompt = normalizedPrompt.isBlank()
-                ? "Пользователь не дал тему. Предложи универсальные идеи для приключенческого квеста."
-                : "Тема и ситуация от пользователя:\n" + normalizedPrompt;
-
+                ? "The user did not provide a theme. Suggest universal adventure-quest first-scene ideas."
+                : "User-provided theme and situation:\n" + normalizedPrompt;
         systemPrompt = systemPrompt + """
                 Additional rules:
                 - Keep first scene focused on one immediate situation.
@@ -416,36 +414,35 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
         }
 
         String systemPrompt = """
-                Ты сценарист интерактивных квестов.
-                Сгенерируй 5 разных вариантов описания следующей сцены.
-                Верни ТОЛЬКО JSON формата:
+                You are a writer of interactive text quests.
+                Generate 5 different next-scene description ideas.
+                Return JSON only in this format:
                 {
                   "ideas": [
-                    { "title": "Короткий заголовок", "scenarioText": "Описание следующей сцены (2-4 предложения)" }
+                    { "title": "Short title", "scenarioText": "Next-scene description (2-4 sentences)" }
                   ]
                 }
-                Ограничения:
-                - Только русский язык.
-                - Без markdown.
-                - Учитывай контекст предыдущей сцены и выбранное действие.
-                - title: 2-8 слов.
-                - scenarioText: конкретная ситуация, которую можно сразу использовать как описание новой сцены.
+                Constraints:
+                - English language only.
+                - No markdown.
+                - Use previous scene context and selected action.
+                - title: 2-8 words.
+                - scenarioText: concrete situation that can be used immediately as the new scene.
                 """;
 
         String userPrompt = """
-                Название проекта: %s
-                Предыдущая сцена (%s):
+                Project name: %s
+                Previous scene (%s):
                 %s
 
-                Выбранное действие:
+                Selected action:
                 %s
                 """.formatted(
-                trimToEmpty(project.getName()).isBlank() ? "Квест" : trimToEmpty(project.getName()),
+                trimToEmpty(project.getName()).isBlank() ? "Quest" : trimToEmpty(project.getName()),
                 sourceNode.getId(),
-                sourceDescription.isBlank() ? "Контекст сцены отсутствует." : sourceDescription,
+                sourceDescription.isBlank() ? "Scene context is missing." : sourceDescription,
                 trimToEmpty(action.getText()).isBlank() ? action.getId() : trimToEmpty(action.getText())
         );
-
         systemPrompt = systemPrompt + """
                 Additional rules:
                 - Use at most one Story Bible signal per generated idea.
@@ -775,3 +772,4 @@ public class NodeGeneratorApplicationService implements NodeGeneratorUseCase {
     private record CachedIdeas(FirstSceneIdeasResponse response, long expiresAtEpochMs) {
     }
 }
+
