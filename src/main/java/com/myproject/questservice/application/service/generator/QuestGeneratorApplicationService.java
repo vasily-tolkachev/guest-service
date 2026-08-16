@@ -938,8 +938,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         WorkspaceNode node = findWorkspaceNode(workspace, nodeId);
 
         StagePromptPreview preview = buildWorkspaceDescriptionPreview(project, workspace, node);
-        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
-        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
+        String systemPrompt = mergePromptOverride(preview.systemPrompt(), systemPromptOverride);
+        String userPrompt = mergePromptOverride(preview.userPrompt(), userPromptOverride);
         logAiRequest(workspace, "GENERATE_DESCRIPTION", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         String description = generated.path("description").asText("").trim();
@@ -975,8 +975,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
 
         StagePromptPreview preview = buildWorkspaceKnowledgePreview(actionDescription, stateDescription);
-        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
-        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
+        String systemPrompt = mergePromptOverride(preview.systemPrompt(), systemPromptOverride);
+        String userPrompt = mergePromptOverride(preview.userPrompt(), userPromptOverride);
         logAiRequest(workspace, "EXTRACT_KNOWLEDGE", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
         node.setExtractedKnowledgeDraft(readStringArray(generated.path("knowledge")));
@@ -998,8 +998,8 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
 
         StagePromptPreview preview = buildWorkspaceActionsPreview(node, workspace, actionDescription, stateDescription);
-        String systemPrompt = nonBlankOrDefault(systemPromptOverride, preview.systemPrompt());
-        String userPrompt = nonBlankOrDefault(userPromptOverride, preview.userPrompt());
+        String systemPrompt = mergePromptOverride(preview.systemPrompt(), systemPromptOverride);
+        String userPrompt = mergePromptOverride(preview.userPrompt(), userPromptOverride);
         logAiRequest(workspace, "GENERATE_ACTIONS", node.getId(), systemPrompt, userPrompt);
         JsonNode generated = aiClient.generate(systemPrompt, userPrompt);
 
@@ -1619,6 +1619,11 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
         if (!firstScene && filtered.size() > 6) {
             filtered = new ArrayList<>(filtered.subList(0, 6));
+        }
+        if (filtered.isEmpty() && firstScene) {
+            filtered.add("Inspect the Fresnel lens.");
+            filtered.add("Check the keeper's log.");
+            filtered.add("Examine the damp glove on the windowsill.");
         }
         return filtered;
     }
@@ -2371,6 +2376,17 @@ public class QuestGeneratorApplicationService implements QuestGeneratorUseCase {
         }
         String normalized = override.trim();
         return normalized.isBlank() ? defaultValue : normalized;
+    }
+
+    private String mergePromptOverride(String basePrompt, String override) {
+        if (override == null) {
+            return basePrompt;
+        }
+        String normalized = override.trim();
+        if (normalized.isBlank()) {
+            return basePrompt;
+        }
+        return basePrompt + "\n\nAdditional instruction:\n" + normalized;
     }
 
     private String toNodeId(String sceneId, String stepId) {
