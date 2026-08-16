@@ -60,14 +60,20 @@ public class OpenAiAiClient implements AiClient {
                 .requestFactory(requestFactory)
                 .build();
 
+        String normalizedSystemPrompt = ensureJsonMention(systemPrompt);
+        String normalizedUserPrompt = userPrompt == null ? "" : userPrompt;
+        if (!containsJsonWord(normalizedSystemPrompt) && !containsJsonWord(normalizedUserPrompt)) {
+            normalizedUserPrompt = normalizedUserPrompt + "\n\nReturn valid JSON only.";
+        }
+
         try {
             ChatCompletionResponse response = restClient.post()
                     .uri("/chat/completions")
                     .body(new ChatCompletionRequest(
                             model,
                             new Message[]{
-                                    new Message("system", systemPrompt),
-                                    new Message("user", userPrompt)
+                                    new Message("system", normalizedSystemPrompt),
+                                    new Message("user", normalizedUserPrompt)
                             },
                             new ResponseFormat("json_object"),
                             false
@@ -123,5 +129,17 @@ public class OpenAiAiClient implements AiClient {
     private record Choice(
             Message message
     ) {
+    }
+
+    private static String ensureJsonMention(String prompt) {
+        String value = prompt == null ? "" : prompt;
+        if (containsJsonWord(value)) {
+            return value;
+        }
+        return value + "\nReturn valid JSON only.";
+    }
+
+    private static boolean containsJsonWord(String value) {
+        return value != null && value.toLowerCase().contains("json");
     }
 }
